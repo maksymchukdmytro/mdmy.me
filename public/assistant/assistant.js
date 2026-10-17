@@ -1,110 +1,18 @@
-// Асистент на сторінці /assistant: вкладки «Задачі», «Нотатки», «Стан», «Налаштування» і виконання команд.
+// Асистент на сторінці /assistant: вкладки «Нотатки», «Стан», «Налаштування» і виконання команд (задачі — tasks.js).
 // Дані на сервері: /api/assistant/* (lib/assistant.js). Спільний api() і вкладки — у recorder.js (window.MD).
 (() => {
   const MD = window.MD, api = MD.api, $ = id => document.getElementById(id);
-  let settings = null, linkPoll = 0, projectFilter = null;
+  let settings = null, linkPoll = 0;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const fmtDate = ms => new Date(ms).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const PRIO = [{ mark: '', title: 'Звичайна' }, { mark: '❗', title: 'Важлива' }, { mark: '‼️', title: 'Термінова' }];
 
   // ---------- команди з вкладки «Запис» ----------
   MD.assist = async text => {
     const r = await api('assistant/message', { method: 'POST', json: { text } });
-    refreshCount();
+    if (MD.refreshTasks) MD.refreshTasks();
     return r;
   };
-
-  // ---------- задачі ----------
-  async function loadTasks() {
-    const box = $('taskList');
-    let data;
-    try { data = await api('assistant/items?kind=task' + (projectFilter ? '&project=' + projectFilter : '')); }
-    catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-    renderChips(data.projects);
-    const list = data.list;
-    if (!projectFilter) setCount(list.filter(x => !x.done).length);
-    if (!list.length) { box.innerHTML = '<p class="st-empty muted">Поки порожньо. Скажіть або напишіть на вкладці «Запис»: «нагадай завтра о 10…», «треба купити…», «щопонеділка о 9…»</p>'; return; }
-    const kids = {};
-    for (const x of list) if (x.parent_id) (kids[x.parent_id] = kids[x.parent_id] || []).push(x);
-    const top = list.filter(x => !x.parent_id || !list.some(p => p.id === x.parent_id));
-    const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
-    const groups = [
-      ['Прострочено', x => !x.done && x.overdue && !x.sent],
-      ['Сьогодні', x => !x.done && x.due_at && !(x.overdue && !x.sent) && x.due_at <= endToday.getTime()],
-      ['Далі', x => !x.done && x.due_at && x.due_at > endToday.getTime()],
-      ['Без строку', x => !x.done && !x.due_at],
-      ['Виконано за тиждень', x => x.done]
-    ];
-    box.innerHTML = '';
-    for (const [title, test] of groups) {
-      const rows = top.filter(test);
-      if (!rows.length) continue;
-      const sec = document.createElement('section'); sec.className = 'st-group';
-      sec.innerHTML = `<h4>${title}</h4>`;
-      for (const it of rows) {
-        sec.append(taskRow(it));
-        for (const c of kids[it.id] || []) sec.append(taskRow(c, true));
-      }
-      box.append(sec);
-    }
-  }
-  function renderChips(projects) {
-    const box = $('projectChips');
-    box.hidden = !projects.length;
-    if (!projects.length) return;
-    box.innerHTML = `<button type="button" data-p="" aria-pressed="${!projectFilter}">Усі</button>` +
-      projects.map(p => `<button type="button" data-p="${p.id}" aria-pressed="${projectFilter === p.id}">📁 ${esc(p.name)}${p.open ? ` <span>${p.open}</span>` : ''}</button>`).join('');
-  }
-  $('projectChips').addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (!b) return; projectFilter = +b.dataset.p || null; loadTasks(); });
-
-  function taskRow(it, child) {
-    const row = document.createElement('div'); row.className = 'st-task' + (it.done ? ' done' : '') + (child ? ' child' : '');
-    const icon = it.kind === 'reminder' ? '⏰' : '☑️';
-    const meta = [it.when ? icon + ' ' + esc(it.when) + (it.sent && !it.done ? ' · надіслано' : '') : '',
-                  it.repeatText ? '🔁 ' + esc(it.repeatText) : '',
-                  it.project && !projectFilter && !child ? '📁 ' + esc(it.project) : ''].filter(Boolean).join(' · ');
-    row.innerHTML = `<label><input type="checkbox" ${it.done ? 'checked' : ''}><span class="st-task-text">${child ? '↳ ' : ''}${esc(it.text)}</span></label>
-      ${it.done ? '' : `<button type="button" class="st-prio p${it.priority}" title="Пріоритет: ${PRIO[it.priority].title}. Натисніть, щоб змінити">${PRIO[it.priority].mark || '·'}</button>`}
-      <span class="st-when">${meta}</span>
-      <button type="button" class="st-x" title="Видалити" aria-label="Видалити">×</button>`;
-    row.querySelector('input').addEventListener('change', async e => {
-      try {
-        const r = await api('assistant/item', { method: 'POST', json: { id: it.id, action: e.target.checked ? 'done' : 'undo' } });
-        if (r.next) flash(row, '🔁 Наступний раз: ' + r.when);
-      } catch (err) { alert(err.message); }
-      setTimeout(loadTasks, it.repeatText ? 900 : 0);
-    });
-    const pb = row.querySelector('.st-prio');
-    if (pb) pb.addEventListener('click', async () => {
-      try { await api('assistant/item', { method: 'POST', json: { id: it.id, action: 'priority', priority: (it.priority + 1) % 3 } }); } catch (err) { alert(err.message); }
-      loadTasks();
-    });
-    row.querySelector('.st-x').addEventListener('click', async () => {
-      if (!confirm(`Видалити «${it.text}»?`)) return;
-      try { await api('assistant/item', { method: 'POST', json: { id: it.id, action: 'delete' } }); } catch (err) { alert(err.message); }
-      loadTasks();
-    });
-    return row;
-  }
-  function flash(row, text) { const s = row.querySelector('.st-when'); if (s) { s.textContent = text; s.classList.add('flash'); } }
-  function setCount(n) { const c = $('taskCount'); c.hidden = !n; c.textContent = n; }
-  async function refreshCount() {
-    try { setCount((await api('assistant/items?kind=task')).list.filter(x => !x.done).length); } catch (e) {}
-  }
-
-  async function showDigest(kind) {
-    const box = $('summaryBox'), btns = [$('summaryBtn'), $('planBtn')];
-    box.hidden = false; box.innerHTML = `<span class="st-spin"></span>${kind === 'plan' ? 'Складаю план…' : 'Складаю підсумок…'}`;
-    btns.forEach(b => b.disabled = true);
-    try {
-      const r = await api('assistant/' + kind, { method: 'POST' });
-      box.textContent = r.text + (r.sent ? '\n\n✈️ Надіслано в Telegram' : '');
-    } catch (e) { box.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
-    btns.forEach(b => b.disabled = false);
-  }
-  $('summaryBtn').addEventListener('click', () => showDigest('summary'));
-  $('planBtn').addEventListener('click', () => showDigest('plan'));
 
   // ---------- нотатки й пошук по всьому ----------
   let noteTimer = 0;
@@ -250,6 +158,7 @@
     $('setSumTime').value = s.summaryTime; $('setSumOn').checked = s.summaryOn;
     $('setMornTime').value = s.morningTime; $('setMornOn').checked = s.morningOn;
     $('setVoiceLang').value = s.voiceLang;
+    $('setWorkHint').value = s.workHint || ''; $('setPersonalHint').value = s.personalHint || '';
     $('assistHint').hidden = s.hasKey;
     clearInterval(linkPoll);
     if (s.hasBot && !s.linked) linkPoll = setInterval(async () => {
@@ -265,7 +174,8 @@
     const body = extra || {
       model: $('setModel').value.trim() || 'claude-haiku-5-5', tz: $('setTz').value,
       summaryTime: $('setSumTime').value || '21:00', summaryOn: $('setSumOn').checked,
-      morningTime: $('setMornTime').value || '08:00', morningOn: $('setMornOn').checked, voiceLang: $('setVoiceLang').value
+      morningTime: $('setMornTime').value || '08:00', morningOn: $('setMornOn').checked, voiceLang: $('setVoiceLang').value,
+      workHint: $('setWorkHint').value.trim(), personalHint: $('setPersonalHint').value.trim()
     };
     if (!extra && $('setKey').value.trim()) body.anthropicKey = $('setKey').value.trim();
     if (!extra && $('setBot').value.trim()) body.botToken = $('setBot').value.trim();
@@ -283,7 +193,6 @@
 
   // ---------- старт і перемикання вкладок ----------
   document.addEventListener('md:tab', e => {
-    if (e.detail === 'tasks') loadTasks();
     if (e.detail === 'notes') loadNotes();
     if (e.detail === 'state') loadState();
     if (e.detail === 'settings') loadSettings();
@@ -292,6 +201,5 @@
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (!document.querySelector('[data-panel="state"]').hidden) loadState(); }, 250); });
   MD.hooks.push(async () => {
     try { const s = await api('assistant/settings'); settings = s; $('assistHint').hidden = s.hasKey; } catch (e) {}
-    refreshCount();
   });
 })();

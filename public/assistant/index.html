@@ -76,8 +76,8 @@
     </section>
   </main>
 
-  <!-- ========== Задачі й нагадування ========== -->
-  <main class="st-main" data-panel="tasks" hidden>
+  <!-- ========== Задачі й нагадування (tasks.js) ========== -->
+  <main class="st-main tk-main" data-panel="tasks" hidden>
     <div class="st-list-head st-pad">
       <h2>Задачі й нагадування</h2>
       <span class="st-btns">
@@ -86,8 +86,94 @@
       </span>
     </div>
     <div id="summaryBox" class="st-summary" hidden></div>
-    <div class="st-chips" id="projectChips" hidden></div>
+
+    <nav class="tk-areas" id="tkAreas" role="tablist" aria-label="Сфера">
+      <button type="button" role="tab" data-area="inbox">📥 Несортовані <span></span></button>
+      <button type="button" role="tab" data-area="work">💼 Робочі <span></span></button>
+      <button type="button" role="tab" data-area="personal">🏠 Особисті <span></span></button>
+      <button type="button" role="tab" data-area="all">Усі <span></span></button>
+    </nav>
+
+    <div class="tk-inbox" id="tkInboxBar" hidden>
+      <span><b id="tkInboxN">0</b> чекають на сортування</span>
+      <button class="btn small primary" id="tkTriage" type="button">▶ Розібрати по одній</button>
+      <button class="btn small" id="tkSuggest" type="button">🪄 Підказати сфери</button>
+      <button class="btn small" id="tkAcceptAll" type="button" hidden>✓ Прийняти підказки (<span></span>)</button>
+    </div>
+
+    <form class="tk-add" id="tkAdd" autocomplete="off">
+      <input id="tkAddText" placeholder="Нова задача… (клавіша N)" maxlength="2000">
+      <select id="tkAddArea" aria-label="Куди додати" title="Куди додати">
+        <option value="inbox">📥</option><option value="work">💼</option><option value="personal">🏠</option>
+      </select>
+      <button class="btn primary" type="submit">Додати</button>
+      <button class="btn" type="button" id="tkAddAi" title="Через асистента: сам розбере дату, час, повтор і проєкт («завтра о 10 подзвонити…»)">🪄</button>
+    </form>
+
+    <div class="tk-tools">
+      <input type="search" id="tkSearch" placeholder="🔍 Пошук (клавіша /)" title="Шукає в тексті, підзадачах, проєктах і тегах">
+      <select id="tkSort" aria-label="Сортування">
+        <option value="smart">↕ За строком</option>
+        <option value="prio">↕ За пріоритетом</option>
+        <option value="created">↕ Нові спершу</option>
+        <option value="alpha">↕ За алфавітом</option>
+      </select>
+      <select id="tkProject" aria-label="Проєкт" hidden></select>
+      <select id="tkPrio" aria-label="Пріоритет">
+        <option value="">Будь-який пріоритет</option>
+        <option value="1">❗ Важливі й термінові</option>
+        <option value="2">‼️ Лише термінові</option>
+      </select>
+      <button class="btn small" id="tkSelectMode" type="button" aria-pressed="false">☑ Вибрати</button>
+    </div>
+    <div class="tk-views" id="tkViews">
+      <button type="button" data-view="open">Відкриті <span></span></button>
+      <button type="button" data-view="today">Сьогодні <span></span></button>
+      <button type="button" data-view="overdue">Прострочені <span></span></button>
+      <button type="button" data-view="week">7 днів <span></span></button>
+      <button type="button" data-view="nodate">Без строку <span></span></button>
+      <button type="button" data-view="done">Виконані <span></span></button>
+    </div>
+    <datalist id="tkProjList"></datalist>
+
     <div id="taskList"></div>
+    <button class="btn wide tk-more" id="tkMore" type="button" hidden>Показати ще</button>
+
+    <div class="tk-bulk" id="tkBulk" hidden>
+      <b><span id="tkBulkN">0</span> вибрано</b>
+      <button type="button" class="btn small" data-bulk="area:work" title="У робочі">💼</button>
+      <button type="button" class="btn small" data-bulk="area:personal" title="В особисті">🏠</button>
+      <button type="button" class="btn small" data-bulk="area:inbox" title="У несортовані">📥</button>
+      <button type="button" class="btn small" data-bulk="done" title="Виконано">✅</button>
+      <select data-bulk-select="due" aria-label="Строк"><option value="">📅 Строк…</option><option value="today">Сьогодні</option><option value="tomorrow">Завтра</option><option value="week">Наступний понеділок</option><option value="none">Без строку</option></select>
+      <select data-bulk-select="priority" aria-label="Пріоритет"><option value="">❗ Пріоритет…</option><option value="0">Звичайна</option><option value="1">❗ Важлива</option><option value="2">‼️ Термінова</option></select>
+      <button type="button" class="btn small danger" data-bulk="delete" title="Видалити">🗑</button>
+      <span class="tk-bulk-r">
+        <button type="button" class="btn small ghost" data-bulk="all">Усі на сторінці</button>
+        <button type="button" class="btn small ghost" data-bulk="cancel" aria-label="Закрити">✕</button>
+      </span>
+    </div>
+
+    <div class="tk-triage" id="tkTriageBox" hidden>
+      <div class="tk-tcard" role="dialog" aria-modal="true" aria-label="Сортування несортованих">
+        <div class="tk-thead"><span id="tkTPos"></span><button type="button" class="st-x" id="tkTClose" aria-label="Закрити">×</button></div>
+        <div class="tk-tbar"><i id="tkTProg"></i></div>
+        <p class="tk-ttext" id="tkTText"></p>
+        <p class="tk-tmeta" id="tkTMeta"></p>
+        <p class="tk-tsug" id="tkTSug" hidden></p>
+        <div class="tk-tbtns">
+          <button type="button" class="tk-big work" data-t="work">💼 Робоче <kbd>1</kbd></button>
+          <button type="button" class="tk-big personal" data-t="personal">🏠 Особисте <kbd>2</kbd></button>
+        </div>
+        <div class="tk-tsmall">
+          <button type="button" class="btn small ghost" id="tkTBack" data-t="back">← Назад</button>
+          <button type="button" class="btn small ghost" data-t="done">✅ Вже зроблено <kbd>D</kbd></button>
+          <button type="button" class="btn small ghost" data-t="delete">🗑 Видалити <kbd>X</kbd></button>
+          <button type="button" class="btn small ghost" data-t="skip">Пропустити <kbd>→</kbd></button>
+        </div>
+      </div>
+    </div>
+    <div class="tk-toast" id="tkToast" role="status" hidden></div>
   </main>
 
   <!-- ========== Нотатки ========== -->
@@ -124,6 +210,13 @@
         <p class="muted small">Надсилаєте боту голосові й текст, а він — нагадування й підсумок дня. Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> командою <code>/newbot</code> і вставте токен, який він видасть.</p>
         <label class="fld"><span>Токен бота</span><input id="setBot" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
         <div id="botState" class="st-bot"></div>
+      </section>
+
+      <section class="st-card st-block">
+        <h3>🗂 Робоче й особисте</h3>
+        <p class="muted small">Підказки для асистента: за ними він одразу розкладає нові задачі. Що незрозуміло — потрапляє в «Несортовані».</p>
+        <label class="fld"><span>💼 Що для мене робота</span><textarea id="setWorkHint" rows="2" maxlength="600" placeholder="напр.: інтернет-магазин antony, LP-CRM, постачальники, клієнти, сайт octotype, бухгалтерія ФОП"></textarea></label>
+        <label class="fld"><span>🏠 Що особисте</span><textarea id="setPersonalHint" rows="2" maxlength="600" placeholder="напр.: дім, сімʼя, діти, лікарі, спорт, авто, покупки для себе"></textarea></label>
       </section>
 
       <section class="st-card st-block">
@@ -164,5 +257,6 @@
 
 <script src="/assistant/recorder.js"></script>
 <script src="/assistant/assistant.js"></script>
+<script src="/assistant/tasks.js"></script>
 </body>
 </html>

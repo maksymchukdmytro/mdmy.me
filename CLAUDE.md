@@ -28,12 +28,20 @@
   шаблон `public/nakladna/invoice.js`). Спосіб доставки: delivery_id з CRM → назва з `deliveryMap` (запам'ятовується зі сторінки).
   Адреса CRM, API-ключ і реквізити — у meta `nakladna_settings`; ключ не віддається в браузер і не комітиться. API `/api/nakladna/*`.
 - `public/assistant/` — сторінка «Персональний асистент»: `recorder.js` (вкладка «Запис»: мікрофон → `/api/stt/transcribe?lang=uk|ru|en|auto`, тіло — сирі байти аудіо до 20 МБ;
-  спільний `window.MD.api()` і вкладки), `assistant.js` (вкладки «Задачі», «Нотатки», «Стан», ⚙️). Історія розшифровок — лише в localStorage браузера.
+  спільний `window.MD.api()` і вкладки), `tasks.js` (вкладка «Задачі»), `assistant.js` («Нотатки», «Стан», ⚙️). Історія розшифровок — лише в localStorage браузера.
+- Вкладка «Задачі» розрахована на сотні записів: фільтри й сортування на сервері (`GET /api/assistant/tasks?area&view&q&project&prio&sort&offset&limit`,
+  сторінки по 100 верхньорівневих задач із підзадачами в `children`, лічильники в `counts`), пошук `ulower(...) LIKE` по тексту, підзадачах, проєктах і тегах.
+  Сфери 📥/💼/🏠/усі; види «відкриті / сьогодні / прострочені / 7 днів / без строку / виконані»; швидке додавання (напряму або 🪄 через асистента);
+  редагування в рядку (`action: edit`, `due` — місцевий час); режим «Вибрати» → `POST /api/assistant/bulk` (area / done / reopen / priority / due / delete, до 500);
+  «Розібрати по одній» для несортованих (клавіші 1 / 2 / D / X / → / ←); сповіщення з «Скасувати». Telegram: `/inbox` — кнопки 💼/🏠 під кожною несортованою.
 - `lib/stt.js` → Python-служба `services/stt` (`/health`, `/transcribe`). Аудіо на сервері не зберігається.
 - Асистент: `lib/assistant.js` (агент, таймер, API `/api/assistant/*`) + `lib/assistant-store.js` (усі зміни даних) + `lib/assistant-time.js` (часові пояси, повтори) + `lib/telegram.js` (бот).
   Агент: текст → Claude API (за замовч. `claude-haiku-5-5`) з інструментами `search_memory` (FTS по всьому сказаному), `get_state` (стан/звички) і фінальним `save_actions`;
   цикл до 4 запитів, `tool_choice` any → на останньому кроці примусово save_actions; для Opus/Sonnet/Fable/Mythos — `auto`.
-  Дії: reminder / task / note / complete / reopen / update / delete / checkin / undo; поля project, priority (0–2), parent_id, repeat {freq, interval, days}.
+  Дії: reminder / task / note / complete / reopen / update / delete / checkin / undo; поля area, project, priority (0–2), parent_id, repeat {freq, interval, days}.
+  Сфери задач (`assistant_items.area`, міграція v2): `work` 💼 робочі, `personal` 🏠 особисті, `inbox` 📥 несортовані (типово; сюди йде все, що агент не може однозначно віднести).
+  Агент визначає сферу за змістом, проєктом, підказками власника (`workHint` / `personalHint` у налаштуваннях) і тим, як розсортовані схожі задачі; підзадачі успадковують сферу батька,
+  зміна сфери задачі переносить і підзадачі. `/api/assistant/triage` — підказки Claude для несортованих (нічого не змінює).
   Таблиці: `assistant_messages`, `assistant_items`, `assistant_projects`, `assistant_tags` + `assistant_item_tags`, `assistant_events` (знімки до/після → скасування),
   `assistant_checkins`, `assistant_habits` + `assistant_habit_log`, `assistant_fts` (FTS5; оновлюється лише кодом сховища — дані міняти тільки через `assistant-store.js`).
   Telegram: long polling без бібліотек, один привʼязаний приватний чат (`/start <код>`), `lastUpdateId` у налаштуваннях; таймер кожні 20 с — нагадування,
