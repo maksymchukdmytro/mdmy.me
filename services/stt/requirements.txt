@@ -1,0 +1,4 @@
+faster-whisper==1.2.1
+av>=11,<16          # новіші версії PyAV ламають декодування у faster-whisper 1.2.1
+fastapi>=0.110
+uvicorn>=0.29

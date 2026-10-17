@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Персональний асистент · mdmy.me</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Nunito:wght@500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/assistant/assistant.css">
+</head>
+<body>
+
+<!-- Вхід (спільний для всіх розділів mdmy.me) -->
+<main id="loginView" class="st-login" hidden>
+  <form id="loginForm" class="st-card">
+    <h1 class="st-title">Персональний асистент</h1>
+    <p class="muted small">Увійдіть своїм обліковим записом mdmy.me.</p>
+    <label class="fld"><span>Логін</span><input id="lgLogin" autocomplete="username" autocapitalize="off" required></label>
+    <label class="fld"><span>Пароль</span><input id="lgPass" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="lgErr"></p>
+    <button class="btn primary" type="submit">Увійти</button>
+  </form>
+</main>
+
+<div id="appView" hidden>
+  <header class="st-top">
+    <h1 class="st-title">Персональний асистент</h1>
+    <span class="tag gray" id="svc">перевіряю сервіс…</span>
+    <button class="btn small ghost" id="logoutBtn" type="button">Вийти</button>
+  </header>
+
+  <nav class="st-tabs" id="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="rec">Запис</button>
+    <button type="button" role="tab" data-tab="tasks">Задачі <span class="st-count" id="taskCount" hidden></span></button>
+    <button type="button" role="tab" data-tab="notes">Нотатки</button>
+    <button type="button" role="tab" data-tab="state">Стан</button>
+    <button type="button" role="tab" data-tab="settings" aria-label="Налаштування" title="Налаштування">⚙️</button>
+  </nav>
+
+  <!-- ========== Запис ========== -->
+  <main class="st-main" data-panel="rec">
+    <section class="st-recorder">
+      <button id="rec" class="st-rec" type="button" aria-label="Почати запис">
+        <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/>
+        </svg>
+        <span class="stop" aria-hidden="true"></span>
+      </button>
+      <p id="status" class="st-status">Натисніть і говоріть, ще раз — щоб завершити</p>
+      <div class="st-langs" id="langs" role="radiogroup" aria-label="Мова запису">
+        <button type="button" role="radio" data-lang="uk">Українська</button>
+        <button type="button" role="radio" data-lang="ru">Русский</button>
+        <button type="button" role="radio" data-lang="auto" title="Модель визначає мову сама, навіть якщо вона змінюється посеред запису">Авто</button>
+      </div>
+      <label class="st-switch" id="assistSwitch">
+        <input type="checkbox" id="assistOn">
+        <span>Виконувати як команду: нагадування, задачі, нотатки</span>
+      </label>
+      <p class="st-hint muted small" id="assistHint" hidden>Щоб асистент виконував дії, додайте ключ Claude API у вкладці «Налаштування».</p>
+    </section>
+
+    <form class="st-ask" id="askForm">
+      <input id="askInput" placeholder="…або напишіть: «нагадай завтра о 10 подзвонити мамі»" autocomplete="off">
+      <button class="btn primary" type="submit">Надіслати</button>
+    </form>
+
+    <section>
+      <div class="st-list-head">
+        <h2>Розшифровки</h2>
+        <button class="btn small ghost" id="clearBtn" type="button" hidden>Очистити</button>
+      </div>
+      <div id="results"><p class="st-empty muted">Тут з'являтимуться тексти. Історія розшифровок зберігається лише в цьому браузері.</p></div>
+    </section>
+  </main>
+
+  <!-- ========== Задачі й нагадування ========== -->
+  <main class="st-main" data-panel="tasks" hidden>
+    <div class="st-list-head st-pad">
+      <h2>Задачі й нагадування</h2>
+      <span class="st-btns">
+        <button class="btn small" id="planBtn" type="button">☀️ План</button>
+        <button class="btn small" id="summaryBtn" type="button">🌙 Підсумок</button>
+      </span>
+    </div>
+    <div id="summaryBox" class="st-summary" hidden></div>
+    <div class="st-chips" id="projectChips" hidden></div>
+    <div id="taskList"></div>
+  </main>
+
+  <!-- ========== Нотатки ========== -->
+  <main class="st-main" data-panel="notes" hidden>
+    <div class="st-list-head st-pad">
+      <h2 id="notesTitle">Нотатки</h2>
+      <input type="search" id="noteSearch" class="st-search" placeholder="Пошук по всьому або #тег">
+    </div>
+    <div id="noteList"></div>
+  </main>
+
+  <!-- ========== Стан ========== -->
+  <main class="st-main" data-panel="state" hidden>
+    <div class="st-list-head st-pad">
+      <h2>Стан за 14 днів</h2>
+    </div>
+    <p class="muted small st-state-hint">Скажіть або напишіть на вкладці «Запис»: «настрій 7, енергія 6, спав 7 годин, зробив зарядку».</p>
+    <div id="stateBox"></div>
+  </main>
+
+  <!-- ========== Налаштування ========== -->
+  <main class="st-main" data-panel="settings" hidden>
+    <form id="setForm" class="st-settings">
+      <section class="st-card st-block">
+        <h3>🧠 Claude API</h3>
+        <p class="muted small">Розуміє повідомлення й перетворює їх на дії. Ключ створюється на <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>; одне повідомлення коштує частки цента. Ключ зберігається лише на сервері й назад не показується.</p>
+        <label class="fld"><span>Ключ API</span><input id="setKey" type="password" autocomplete="off" placeholder="sk-ant-…"></label>
+        <p class="small" id="keyState"></p>
+        <label class="fld"><span>Модель</span><input id="setModel" autocomplete="off" placeholder="claude-haiku-5-5"></label>
+      </section>
+
+      <section class="st-card st-block">
+        <h3>✈️ Telegram-бот</h3>
+        <p class="muted small">Надсилаєте боту голосові й текст, а він — нагадування й підсумок дня. Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> командою <code>/newbot</code> і вставте токен, який він видасть.</p>
+        <label class="fld"><span>Токен бота</span><input id="setBot" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
+        <div id="botState" class="st-bot"></div>
+      </section>
+
+      <section class="st-card st-block">
+        <h3>🕘 Розклад</h3>
+        <div class="st-row">
+          <label class="fld"><span>Часовий пояс</span>
+            <select id="setTz">
+              <option value="Europe/Kyiv">Київ</option>
+              <option value="Europe/Chisinau">Кишинів</option>
+              <option value="Europe/Warsaw">Варшава</option>
+              <option value="Europe/Berlin">Берлін</option>
+              <option value="Europe/Prague">Прага</option>
+              <option value="Europe/London">Лондон</option>
+              <option value="America/New_York">Нью-Йорк</option>
+            </select>
+          </label>
+          <label class="fld"><span>Підсумок дня о</span><input id="setSumTime" type="time"></label>
+        </div>
+        <label class="st-switch"><input type="checkbox" id="setSumOn"><span>Надсилати підсумок дня в Telegram</span></label>
+        <div class="st-row">
+          <label class="fld"><span>Ранковий план о</span><input id="setMornTime" type="time" max="11:59"></label>
+        </div>
+        <label class="st-switch"><input type="checkbox" id="setMornOn"><span>Надсилати ранковий план дня в Telegram</span></label>
+        <label class="fld"><span>Мова голосових у Telegram</span>
+          <select id="setVoiceLang">
+            <option value="uk">Українська</option>
+            <option value="ru">Русский</option>
+            <option value="auto">Авто (мішане мовлення)</option>
+          </select>
+        </label>
+      </section>
+
+      <p class="err" id="setErr"></p>
+      <button class="btn primary" type="submit" id="setSave">Зберегти</button>
+    </form>
+  </main>
+</div>
+
+<script src="/assistant/recorder.js"></script>
+<script src="/assistant/assistant.js"></script>
+</body>
+</html>

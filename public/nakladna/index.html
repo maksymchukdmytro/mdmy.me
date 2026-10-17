@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Видаткові накладні · mdmy.me</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Nunito:wght@500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/nakladna/nakladna.css">
+</head>
+<body>
+
+<!-- Вхід (спільний для всіх розділів mdmy.me) -->
+<main id="loginView" class="nk-login" hidden>
+  <form id="loginForm" class="nk-card">
+    <h1 class="nk-title">Видаткові накладні</h1>
+    <p class="muted small">Увійдіть своїм обліковим записом mdmy.me.</p>
+    <label class="fld"><span>Логін</span><input id="lgLogin" autocomplete="username" autocapitalize="off" required></label>
+    <label class="fld"><span>Пароль</span><input id="lgPass" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="lgErr"></p>
+    <button class="btn primary" type="submit">Увійти</button>
+  </form>
+</main>
+
+<div id="appView" hidden>
+  <header class="nk-top">
+    <h1 class="nk-title">Накладні</h1>
+    <div class="nk-top-actions">
+      <button class="btn" id="btnSettings" type="button">Налаштування</button>
+      <button class="btn" id="btnLogout" type="button">Вийти</button>
+    </div>
+  </header>
+
+  <main class="nk-main">
+    <p class="nk-banner" id="setupBanner" hidden>Спершу заповніть адресу LP-CRM, API-ключ і свої реквізити в <a href="#" id="bannerLink">налаштуваннях</a>.</p>
+
+    <form id="findForm" class="nk-find nk-card">
+      <label class="fld nk-grow"><span>Номер замовлення в LP-CRM</span>
+        <input id="orderIds" inputmode="numeric" placeholder="наприклад 353 (можна кілька через пробіл)" autocomplete="off" required></label>
+      <button class="btn primary" type="submit" id="findBtn">Знайти</button>
+      <label class="nk-check"><input type="checkbox" id="debug"> показати відповідь CRM</label>
+    </form>
+    <p class="err" id="findErr"></p>
+    <p class="muted small" id="findHint" hidden>Шукаю замовлення в CRM… Перший пошук за номером може тривати до хвилини, далі — миттєво.</p>
+    <pre class="nk-raw" id="rawOut" hidden></pre>
+
+    <div id="orders"></div>
+  </main>
+</div>
+
+<!-- Налаштування -->
+<div class="nk-drawer" id="settings" hidden>
+  <form class="nk-drawer-panel" id="settingsForm">
+    <div class="nk-drawer-head"><h2>Налаштування</h2><button class="btn small" type="button" id="closeSettings">Закрити</button></div>
+
+    <h3>LP-CRM</h3>
+    <label class="fld"><span>Адреса CRM</span><input name="domain" placeholder="shop.lp-crm.biz" autocapitalize="off" spellcheck="false"></label>
+    <label class="fld"><span>API-ключ</span><input name="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
+    <p class="muted small" id="keyState"></p>
+
+    <h3>Постачальник (ваші реквізити)</h3>
+    <label class="fld"><span>Назва</span><input name="seller.name" placeholder="ФОП Прізвище Ім'я По батькові"></label>
+    <div class="nk-row2">
+      <label class="fld"><span>Тип коду</span><select name="seller.codeLabel"><option>ІПН</option><option>РНОКПП</option><option>ЄДРПОУ</option></select></label>
+      <label class="fld"><span>Код</span><input name="seller.code" inputmode="numeric"></label>
+    </div>
+    <label class="fld"><span>Адреса</span><input name="seller.address"></label>
+    <label class="fld"><span>IBAN</span><input name="seller.iban" placeholder="UA…"></label>
+    <label class="fld"><span>Банк</span><input name="seller.bank"></label>
+    <label class="fld"><span>Телефон</span><input name="seller.phone"></label>
+    <div class="nk-row2">
+      <label class="fld"><span>ПДВ</span><input name="seller.vatNote" placeholder="Без ПДВ"></label>
+      <label class="fld"><span>Хто відвантажує (підпис)</span><input name="seller.signer" placeholder="Прізвище І.П."></label>
+    </div>
+
+    <h3>Накладна</h3>
+    <div class="nk-row2">
+      <label class="fld"><span>Префікс номера</span><input name="invoice.prefix" placeholder="РН-"></label>
+      <label class="fld"><span>Одиниця</span><input name="invoice.unit" placeholder="шт."></label>
+    </div>
+
+    <h3>Оформлення</h3>
+    <div class="nk-logo">
+      <div class="nk-logo-box" id="logoBox"><img id="logoImg" alt="Логотип" hidden><span class="muted small" id="logoEmpty">Логотипу немає</span></div>
+      <div class="nk-logo-actions">
+        <label class="btn small nk-file">Завантажити логотип<input type="file" id="logoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp"></label>
+        <button class="btn small danger" type="button" id="logoDel" hidden>Прибрати</button>
+        <span class="muted small">PNG з прозорим фоном виглядає найкраще</span>
+      </div>
+    </div>
+    <label class="fld"><span>Фірмовий колір</span>
+      <div class="nk-color"><input type="color" name="invoice.accent" value="#C1D0E4"><span class="muted small">смуга, заголовки, підсумок</span></div></label>
+    <label class="fld"><span>Сайт (унизу накладної)</span><input name="invoice.site" placeholder="antony.com.ua" autocapitalize="off"></label>
+    <label class="fld"><span>Підпис унизу</span><input name="invoice.note" placeholder="Дякуємо за покупку!"></label>
+
+    <p class="err" id="setErr"></p>
+    <div class="nk-drawer-foot"><span class="tag ok" id="setOk" hidden>Збережено</span><button class="btn primary" type="submit">Зберегти</button></div>
+  </form>
+</div>
+
+<datalist id="deliveryList">
+  <option value="Нова Пошта"><option value="Укрпошта"><option value="Meest"><option value="Rozetka Delivery"><option value="Самовивіз"><option value="Кур'єр">
+</datalist>
+<template id="orderTpl">
+  <section class="nk-order nk-card">
+    <div class="nk-order-head">
+      <h2></h2>
+      <div class="nk-order-actions">
+        <button class="btn" type="button" data-act="preview">Переглянути</button>
+        <button class="btn primary" type="button" data-act="download">Завантажити PDF</button>
+      </div>
+    </div>
+    <div class="nk-grid">
+      <label class="fld"><span>№ накладної</span><input data-f="number"></label>
+      <label class="fld"><span>Дата</span><input data-f="date" type="date"></label>
+      <label class="fld nk-span2"><span>Одержувач</span><input data-f="buyer"></label>
+      <label class="fld"><span>Телефон</span><input data-f="phone"></label>
+      <label class="fld nk-span3"><span>Адреса доставки</span><input data-f="address"></label>
+      <label class="fld nk-span2"><span>Доставка</span><input data-f="delivery" list="deliveryList" placeholder="Нова Пошта, Укрпошта, Meest…"></label>
+      <label class="fld nk-span2"><span>ТТН</span><input data-f="ttn" inputmode="numeric"></label>
+    </div>
+    <div class="nk-items-wrap">
+      <table class="nk-items">
+        <thead><tr><th>Найменування</th><th class="r">К-сть</th><th class="r">Ціна, грн</th><th class="r">Сума</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="nk-order-foot">
+      <button class="btn small" type="button" data-act="add">+ Рядок</button>
+      <div class="nk-total"><span class="muted">Разом:</span> <b data-out="total"></b></div>
+    </div>
+    <p class="nk-warn" data-out="warn" hidden></p>
+    <div class="nk-preview" hidden><iframe title="Попередній перегляд накладної"></iframe></div>
+  </section>
+</template>
+
+<script src="/nakladna/vendor/pdfmake.min.js"></script>
+<script src="/nakladna/vendor/inter-fonts.js"></script>
+<script src="/nakladna/invoice.js"></script>
+<script src="/nakladna/app.js"></script>
+</body>
+</html>
