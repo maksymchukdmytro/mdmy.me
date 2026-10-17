@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mdmy.me</title>
+  <meta name="description" content="mdmy.me">
+  <style>
+    :root {
+      --bg: #F5F5F3;
+      --ink: #0B0B0C;
+      --muted: #6B6B66;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0B0B0C;
+        --ink: #F5F5F3;
+        --muted: #8A8A86;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 9vw, 96px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+    p {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <h1>Привіт, світ!</h1>
+  <p>mdmy.me</p>
+</body>
+</html>
