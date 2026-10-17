@@ -45,8 +45,7 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
       const r = require('./lib/import-octotype')(db, login);
       audit('import:octotype', login);
       console.log('Перенесено зі старої бази:', JSON.stringify(r));
-      const weak = db.prepare('SELECT login, salt, hash FROM accounts').all().filter(a => ['admin', a.login, '12345678', 'password'].some(p => DB.checkPass(p, a.salt, a.hash)));
-      if (weak.length) console.log('Увага: слабкий пароль у', weak.map(a => a.login).join(', '), '— змініть: npm run account -- password <логін>');
+      if (r.skippedWeak) console.log('Не перенесено через надто простий пароль:', r.skippedWeak.join(', '));
     } catch (e) { fail(e.message); }
   } else {
     console.log(`Команди:
