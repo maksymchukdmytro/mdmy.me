@@ -29,25 +29,38 @@ applyTheme();
 export const setTheme = t => { pref.set('theme', t); applyTheme(); };
 
 // ---------- вхід ----------
-function showLogin(err) {
+// Головне — «Продовжити з Google» (вхід і реєстрація одним кроком); логін і пароль — під ним, згорнуто.
+// Помилки входу через Google сервер повертає в ?auth_error=…
+async function showLogin(err) {
   closeTask();
+  const q = new URLSearchParams(location.search);
+  if (q.get('auth_error')) { err = q.get('auth_error'); history.replaceState(null, '', location.pathname + location.hash); }
+  let cfg = { google: false };
+  try { cfg = await api('auth/config'); } catch (e) {}
   app.innerHTML = `<main class="login">
-    <form class="login-card" id="loginForm">
+    <div class="login-card">
       <div class="login-logo"><span class="ws-logo lg">${wordmark}</span></div>
-      <h1>Вхід</h1>
-      <p class="muted">Задачі, нотатки й персональний асистент</p>
-      <label class="field"><span>Логін</span><input name="login" autocomplete="username" autocapitalize="off" required></label>
-      <label class="field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="login-sub">Задачі, нотатки й асистент — голосом</p>
+      ${cfg.google ? `<a class="btn primary wide g-btn" href="/api/auth/google/start">Продовжити з Google</a>
+        <p class="muted small login-note">${cfg.signup ? 'Немає акаунта — створимо одразу, без форм і паролів.' : 'Вхід для зареєстрованих користувачів.'}</p>
+        <button type="button" class="link login-more" data-more>Увійти за логіном і паролем</button>` : ''}
       <p class="err">${esc(err || '')}</p>
-      <button class="btn primary wide" type="submit">Увійти</button>
-    </form></main>`;
+      <form class="login-form" id="loginForm" ${cfg.google ? 'hidden' : ''}>
+        <label class="field"><span>Логін</span><input name="login" autocomplete="username" autocapitalize="off" required></label>
+        <label class="field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn ${cfg.google ? '' : 'primary '}wide" type="submit">Увійти</button>
+      </form>
+      ${cfg.contact !== undefined ? '<a class="muted small login-privacy" href="/privacy.html" target="_blank" rel="noopener">Конфіденційність</a>' : ''}
+    </div></main>`;
   const f = $('#loginForm');
-  f.login.focus();
+  const more = $('[data-more]');
+  if (more) more.addEventListener('click', () => { f.hidden = false; more.remove(); f.login.focus(); });
+  else f.login.focus();
   f.addEventListener('submit', async e => {
     e.preventDefault();
     const btn = f.querySelector('button'); btn.disabled = true;
     try { await post('login', { login: f.login.value, password: f.password.value }); await boot(); }
-    catch (err) { f.querySelector('.err').textContent = err.message; btn.disabled = false; }
+    catch (err) { $('.login-card .err').textContent = err.message; btn.disabled = false; }
   });
 }
 onUnauthorized(() => { if (account) { account = null; clearToken(); showLogin('Сесія завершилась — увійдіть знову.'); } });
@@ -304,7 +317,29 @@ async function boot() {
   current = null; currentKey = ''; currentPage = '';
   shell();
   route();
-  push.registerSW().then(() => setTimeout(offerPush, 2500));
+  const q = new URLSearchParams(location.search);
+  if (q.get('welcome')) { history.replaceState(null, '', location.pathname + location.hash); welcome(); }
+  else push.registerSW().then(() => setTimeout(offerPush, 2500));
+}
+
+// Перший вхід після реєстрації: часовий пояс з пристрою — мовчки; коротке привітання й перший крок — голосом
+async function welcome() {
+  try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; if (tz) await post('assistant/settings', { tz }); } catch (e) {}
+  const first = esc(String(account.name || '').split(' ')[0]);
+  const s = sheet(`<div class="welcome">
+      <div class="welcome-mark">${icon('mic', 30)}</div>
+      <h2>Вітаю${first ? ', ' + first : ''}!</h2>
+      <p>Скажи або напиши, що треба зробити, — асистент сам розбере строк, простір і нагадування.</p>
+      <p class="muted small">Твої записи зберігаються окремо від інших користувачів. Видалити їх можна будь-коли в налаштуваннях.</p>
+      <button type="button" class="btn primary wide" data-w="voice">${icon('mic', 18)}Сказати першу задачу</button>
+      <button type="button" class="btn wide ghost" data-w="tg">${icon('telegram', 16)}Підключити Telegram</button>
+    </div>`, { label: 'Вітаю' });
+  s.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-w]'); if (!b) return;
+    s.close();
+    if (b.dataset.w === 'voice') setTimeout(() => import('./views/composer.js').then(m => m.compose({ voice: true })), 250);
+    else go('#/settings/tg');
+  });
 }
 
 // Один раз на пристрої пропонуємо увімкнути сповіщення (нагадування приходитимуть, навіть коли сайт закритий)

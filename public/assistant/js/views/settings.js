@@ -2,12 +2,12 @@
 // «Асистент» і «Telegram» (ключ Claude, модель, бот) бачить і змінює лише адміністратор (accounts.role = 'admin').
 import { get, post, patch, del, api } from '../api.js';
 import { icon, SPACE_ICONS } from '../icons.js';
-import { $, $$, esc, pref, toast, fail, menu, confirmBox, fmtDate } from '../ui.js';
+import { $, $$, esc, pref, toast, fail, menu, confirmBox, fmtDate, sheet } from '../ui.js';
 import { meta, refreshMeta } from '../store.js';
 import * as push from '../push.js';
 
 const TZ = [['Europe/Kyiv', 'Київ'], ['Europe/Chisinau', 'Кишинів'], ['Europe/Warsaw', 'Варшава'], ['Europe/Berlin', 'Берлін'], ['Europe/Prague', 'Прага'], ['Europe/London', 'Лондон'], ['America/New_York', 'Нью-Йорк']];
-const ADMIN = ['ai'];                // ключ Claude і модель — лише для адміністратора; бота (токен) — теж, а привʼязати свій Telegram може кожен
+const ADMIN = ['ai', 'google', 'users'];                // ключ Claude і модель — лише для адміністратора; бота (токен) — теж, а привʼязати свій Telegram може кожен
 const STYLES = [
   ['Коротко', 'Відповідай дуже коротко, 1–2 речення, без вступів і без емодзі.'],
   ['Дружньо', 'Звертайся на «ти», тепло й підбадьорливо, можна 1–2 емодзі.'],
@@ -22,7 +22,7 @@ export function settingsPage(sub) {
     root = el;
     root.innerHTML = `<div class="page settings">
       <div class="page-head"><h1 class="page-title">Налаштування</h1></div>
-      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['style', 'Стиль спілкування'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
+      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['style', 'Стиль спілкування'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис'], ['google', 'Вхід через Google'], ['users', 'Користувачі']]
         .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}"${ADMIN.includes(k) ? ' hidden' : ''}>${l}</a>`).join('')}</nav>
 
       <section class="set" id="set-spaces">
@@ -87,15 +87,43 @@ export function settingsPage(sub) {
 
       <section class="set" id="set-account">
         <h2>Обліковий запис</h2>
-        <div class="kv"><span>Поточний пароль</span><div><input type="password" data-p="old" autocomplete="current-password"></div></div>
-        <div class="kv"><span>Новий пароль</span><div><input type="password" data-p="new" autocomplete="new-password" placeholder="щонайменше 8 символів"></div></div>
-        <div class="row-act"><button type="button" class="btn sm" data-a="password">Змінити пароль</button><button type="button" class="btn sm ghost" data-a="logout">${icon('logout', 14)}Вийти</button></div>
+        <div class="acc-who"></div>
+        <div class="acc-google"></div>
+        <div class="acc-pass">
+          <div class="kv acc-old"><span>Поточний пароль</span><div><input type="password" data-p="old" autocomplete="current-password"></div></div>
+          <div class="kv"><span class="acc-new-l">Новий пароль</span><div><input type="password" data-p="new" autocomplete="new-password" placeholder="щонайменше 8 символів"></div></div>
+          <div class="row-act"><button type="button" class="btn sm" data-a="password">Змінити пароль</button><button type="button" class="btn sm ghost" data-a="logout">${icon('logout', 14)}Вийти</button></div>
+        </div>
+        <div class="danger-zone">
+          <div class="dz-row"><div><b>Почати спочатку</b><p class="muted small">Стерти всі задачі, нотатки, звички, щоденні завдання й історію розмов. Акаунт, вхід, налаштування й Telegram залишаться.</p></div>
+            <button type="button" class="btn sm ghost danger" data-a="reset">Очистити</button></div>
+          <div class="dz-row acc-del"><div><b>Видалити акаунт</b><p class="muted small">Назавжди видалити акаунт і всі його дані з сервера. Скасувати не можна.</p></div>
+            <button type="button" class="btn sm ghost danger" data-a="delete-account">Видалити</button></div>
+        </div>
+      </section>
+
+      <section class="set" id="set-google" hidden>
+        <h2>Вхід через Google</h2>
+        <p class="muted">Вхід і реєстрація одним кроком. Створіть OAuth-клієнт у <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud → Credentials</a> (тип «Web application») і додайте адресу повернення нижче.</p>
+        <div class="kv"><span>Адреса повернення</span><div><code class="g-redirect"></code> <button type="button" class="link" data-a="copy-redirect">копіювати</button></div></div>
+        <div class="kv"><span>Client ID</span><div><input data-g="clientId" placeholder="….apps.googleusercontent.com" autocomplete="off" spellcheck="false"></div></div>
+        <div class="kv"><span>Client secret</span><div><input type="password" data-g="clientSecret" placeholder="GOCSPX-…" autocomplete="off"><p class="small g-secret"></p></div></div>
+        <div class="kv"><span>Реєстрація</span><div><label class="switch"><input type="checkbox" data-g="signup"><span>нові користувачі можуть зареєструватись</span></label></div></div>
+        <div class="kv"><span>Ліміт асистента</span><div class="inline"><input type="number" min="0" max="10000" data-g="userLimit" style="width:110px"><span class="muted small">запитів на день для кожного користувача (0 — без ліміту)</span></div></div>
+        <div class="kv"><span>Контакт</span><div><input type="email" data-g="contact" placeholder="пошта для питань про дані"><p class="muted small">Показується на сторінці <a href="/privacy.html" target="_blank" rel="noopener">конфіденційності</a> — потрібна Google.</p></div></div>
+        <div class="row-act"><button type="button" class="btn sm primary" data-a="google-save">Зберегти</button><span class="small g-state"></span></div>
+      </section>
+
+      <section class="set" id="set-users" hidden>
+        <h2>Користувачі</h2>
+        <p class="muted">Хто має доступ до mdmy. Дані кожного — в окремій базі; тут лише облікові записи.</p>
+        <div class="users-list"></div>
       </section>
     </div>`;
     root.addEventListener('click', onClick);
     root.addEventListener('change', onChange);
     $$('[data-theme]', root).forEach(b => b.setAttribute('aria-checked', String(b.dataset.theme === pref.get('theme', 'system'))));
-    drawSpaces(); load(); loadSessions(); drawPush();
+    drawSpaces(); load(); loadSessions(); drawPush(); loadMe();
     if (sub) setTimeout(() => { const t = $('#set-' + sub, root); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   }
   async function load() {
@@ -106,7 +134,7 @@ export function settingsPage(sub) {
     const f = k => $(`[data-f="${k}"]`, root);
     ADMIN.forEach(k => { $(`#set-${k}`, root).hidden = !s.admin; $(`.set-nav [data-k="${k}"]`, root).hidden = !s.admin; });
     // гостьовий вхід: пароль спільний, входи чужі — ці розділи не показуємо
-    if (s.demo) ['devices', 'account'].forEach(k => { $(`#set-${k}`, root).hidden = true; $(`.set-nav [data-k="${k}"]`, root).hidden = true; });
+    if (s.demo) ['devices'].forEach(k => { $(`#set-${k}`, root).hidden = true; $(`.set-nav [data-k="${k}"]`, root).hidden = true; });
     $('.demo-out', root).hidden = !s.demo;
     if (document.activeElement !== f('style')) f('style').value = s.style || '';
     const tz = f('tz'); tz.value = s.tz; if (tz.value !== s.tz) { tz.add(new Option(s.tz, s.tz)); tz.value = s.tz; }
@@ -138,6 +166,48 @@ export function settingsPage(sub) {
       if (f('botToken').value.trim()) body.botToken = f('botToken').value.trim();
     }
     try { fill(await post('assistant/settings', body)); toast('Збережено'); } catch (e) { err.textContent = e.message; }
+  }
+
+  // ---------- обліковий запис ----------
+  let me = null;
+  async function loadMe() {
+    try { me = (await get('me')).account; } catch (e) { return; }
+    $('.acc-who', root).innerHTML = `<p><b>${esc(me.name)}</b> <span class="muted">· ${esc(me.login)}${me.email ? ' · ' + esc(me.email) : ''}</span></p>`;
+    $('.acc-google', root).innerHTML = me.google ? `<p class="small">${icon('checkCircle', 14)} Вхід через Google привʼязано</p>`
+      : me.googleOn && !me.demo ? `<a class="btn sm" href="/api/auth/google/start?link=1">Привʼязати вхід через Google</a>` : '';
+    $('.acc-old', root).hidden = !me.hasPassword;
+    $('.acc-new-l', root).textContent = me.hasPassword ? 'Новий пароль' : 'Пароль для входу за логіном';
+    $('[data-a="password"]', root).textContent = me.hasPassword ? 'Змінити пароль' : 'Задати пароль';
+    $('.acc-del', root).hidden = me.own || me.demo;
+    $('.acc-pass', root).hidden = me.demo;                        // гостьовий пароль спільний
+    if (me.admin) { loadGoogle(); loadUsers(); }
+  }
+  async function loadGoogle() {
+    let g; try { g = await get('admin/auth'); } catch (e) { return; }
+    const f = k => $(`[data-g="${k}"]`, root);
+    $('.g-redirect', root).textContent = g.redirectUri;
+    f('clientId').value = g.clientId; f('clientSecret').value = ''; f('signup').checked = g.signup; f('userLimit').value = g.userLimit; f('contact').value = g.contact;
+    $('.g-secret', root).innerHTML = g.hasSecret ? 'Секрет задано · <button type="button" class="link" data-a="google-clear">видалити</button>' : '<span class="muted">Секрет не задано</span>';
+    $('.g-state', root).innerHTML = g.enabled ? `${icon('checkCircle', 14)} Увімкнено` : '<span class="muted">Вимкнено — потрібні Client ID і секрет</span>';
+  }
+  async function loadUsers() {
+    let r; try { r = await get('admin/users'); } catch (e) { return; }
+    const ROLE = { admin: 'адмін', demo: 'гість', user: '' };
+    $('.users-list', root).innerHTML = r.list.map(u => `<div class="sess">${icon(u.google ? 'checkCircle' : 'circle', 16)}<span><b>${esc(u.name)}</b> <span class="muted small">${esc(u.email || u.login)}${ROLE[u.role] ? ' · ' + ROLE[u.role] : ''}</span></span>
+      <span class="muted small">${u.last_login ? 'вхід ' + esc(fmtDate(u.last_login)) : 'з ' + esc(fmtDate(u.created))}</span></div>`).join('') + `<p class="muted small">Усього: ${r.list.length}</p>`;
+  }
+  // підтвердження незворотної дії: треба ввести слово (ОЧИСТИТИ / ВИДАЛИТИ)
+  function typed(word, text, ok) {
+    return new Promise(resolve => {
+      let done = false;
+      const s = sheet(`<div class="sheet-head"><b>${esc(ok)}</b></div><form class="confirm-type"><p>${text}</p>
+        <p class="muted small">Щоб підтвердити, введіть <b>${word}</b></p><input autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button class="btn primary danger-btn wide" type="submit" disabled>${esc(ok)}</button></form>`, { label: ok, onClose: () => { if (!done) resolve(null); } });
+      const inp = $('input', s.el), btn = $('button[type=submit]', s.el);
+      setTimeout(() => inp.focus(), 250);
+      inp.addEventListener('input', () => { btn.disabled = inp.value.trim().toUpperCase() !== word; });
+      $('form', s.el).addEventListener('submit', e => { e.preventDefault(); if (btn.disabled) return; done = true; s.close(); resolve(word); });
+    });
   }
 
   // ---------- простори ----------
@@ -224,9 +294,24 @@ export function settingsPage(sub) {
     }
     if (k === 'password') {
       const o = $('[data-p="old"]', root), n = $('[data-p="new"]', root);
-      try { await post('password', { old: o.value, password: n.value }); o.value = ''; n.value = ''; toast('Пароль змінено. Інші пристрої вийдуть із системи.'); } catch (err) { fail(err); }
+      try { await post('password', { old: o.value, password: n.value }); o.value = ''; n.value = ''; toast(me && !me.hasPassword ? 'Пароль задано' : 'Пароль змінено. Інші пристрої вийдуть із системи.'); loadMe(); } catch (err) { fail(err); }
     }
     if (k === 'logout') window.MDMY.logout();
+    if (k === 'reset') {
+      if (await typed('ОЧИСТИТИ', 'Усі задачі, нотатки, звички, щоденні завдання й історія розмов зникнуть. Акаунт і налаштування залишаться.', 'Почати спочатку') !== 'ОЧИСТИТИ') return;
+      try { await post('account/reset', { confirm: 'ОЧИСТИТИ' }); await refreshMeta(); document.dispatchEvent(new CustomEvent('mdmy:changed')); toast('Готово — чистий аркуш'); location.hash = '#/today'; } catch (err) { fail(err); }
+    }
+    if (k === 'delete-account') {
+      if (await typed('ВИДАЛИТИ', 'Акаунт і всі його дані буде видалено з сервера назавжди.', 'Видалити акаунт') !== 'ВИДАЛИТИ') return;
+      try { await post('account/delete', { confirm: 'ВИДАЛИТИ' }); toast('Акаунт видалено'); setTimeout(() => location.replace('/assistant/'), 800); } catch (err) { fail(err); }
+    }
+    if (k === 'copy-redirect') navigator.clipboard.writeText($('.g-redirect', root).textContent).then(() => toast('Скопійовано'), () => {});
+    if (k === 'google-clear' && await confirmBox('Видалити секрет Google? Вхід через Google вимкнеться.')) { try { await post('admin/auth', { clearSecret: true }); loadGoogle(); } catch (err) { fail(err); } }
+    if (k === 'google-save') {
+      const f = x => $(`[data-g="${x}"]`, root), body = { clientId: f('clientId').value.trim(), signup: f('signup').checked, userLimit: +f('userLimit').value || 0, contact: f('contact').value.trim() };
+      if (f('clientSecret').value.trim()) body.clientSecret = f('clientSecret').value.trim();
+      try { await post('admin/auth', body); toast('Збережено'); loadGoogle(); } catch (err) { fail(err); }
+    }
     if (k === 'push-on') { a.disabled = true; try { await push.enable(); toast('Сповіщення увімкнено'); } catch (err) { fail(err); } drawPush(); }
     if (k === 'push-off') { await push.disable(); toast('Вимкнено на цьому пристрої'); drawPush(); }
     if (k === 'push-test') { try { const r = await push.test(); toast(r.sent ? `Надіслано на пристроїв: ${r.sent}` : 'Не вдалося надіслати — спробуйте вимкнути й увімкнути знову'); } catch (err) { fail(err); } }

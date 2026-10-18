@@ -2,7 +2,8 @@
 //  • /                — головна сторінка;
 //  • /nakladna/       — видаткові накладні з LP-CRM у PDF;
 //  • /assistant/      — персональний асистент: голос і текст → задачі, нагадування, нотатки, ритуали дня, Telegram-бот;
-//  • /m/<файл>        — фото й відео ритуалів (випадкові імена, без входу — їх забирають Telegram і сповіщення);
+//  • /m/<файл>        — фото й відео ритуалів власника (випадкові імена, без входу — їх забирають Telegram і сповіщення);
+//    /m/u5/<файл>     — медіа окремої бази: за сесією її власника або за підписаним посиланням;
 //  • /api/*           — вхід (lib/auth.js) і API розділів; усе, крім входу, лише після входу.
 // Запуск: npm install && npm start, потім відкрити http://localhost:3001
 // Перший обліковий запис: npm run account -- create <логін> "<Ім'я>"
@@ -25,39 +26,92 @@ const { readBody } = require('./lib/util');
 
 // ---------- окремі бази облікових записів (accounts.ws, див. lib/db.js v8) ----------
 // Кожна — свій файл DATA_DIR/ws/<ws>/mdmy.db зі своїми задачами, звичками, ритуалами й сповіщеннями.
-// Ключ Claude і модель — з основної бази; Telegram-бот — лише в основній.
+// Ключ Claude, модель і Telegram-бот — з основної бази (бот один, чати — свої).
+const crypto = require('crypto');
 const WS = new Map();
 function workspace(ws) {
-  if (!ws) return { assistant, push };
+  if (!ws) return { db, assistant, push };
   let w = WS.get(ws); if (w) return w;
-  const wdb = DB.open(DB.wsDir(DATA, ws));
-  const acc0 = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
-  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws, allow: acc0 && acc0.role === 'demo' ? () => demoAllow(ws) : null });
-  w = { db: wdb, assistant: as, push: as.push };
-  WS.set(ws, w);
   const acc = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
+  const wdb = DB.open(DB.wsDir(DATA, ws));
+  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws, allow: () => allowAI(ws), signMedia: u => signMedia(u) });
+  w = { db: wdb, assistant: as, push: as.push, ws };
+  WS.set(ws, w);
   if (acc && acc.role === 'demo') { try { require('./lib/demo')(wdb, as); } catch (e) { console.error('[demo] заповнення:', e.message); } }
   as.start();
   return w;
 }
 const wsOf = a => workspace(a.ws);
-
-// Гостьовий вхід (роль demo): спільний пароль, тож обмежуємо дороге — асистент і розшифровку голосу — денним лімітом
-// (повідомлення асистенту рахує сам асистент через allow — і з сайту, і з Telegram).
-const DEMO_LIMIT = 40, demoUse = new Map();
-function demoAllow(ws) {
-  const day = new Date().toISOString().slice(0, 10), u = demoUse.get(ws);
-  const n = u && u.day === day ? u.n + 1 : 1;
-  demoUse.set(ws, { day, n });
-  return n <= DEMO_LIMIT;
+function closeWorkspace(ws) {
+  const w = WS.get(ws); if (!w) return;
+  w.assistant.stop(); WS.delete(ws);
+  try { w.db.close(); } catch (e) {}
 }
-function demoBlocked(a, req, url) {
-  if (a.role !== 'demo') return null;
-  if (url.startsWith('/api/nakladna/')) return 'Накладні в гостьовому вході недоступні.';
-  if (url === '/api/routines/media' && req.method === 'POST') return 'У гостьовому вході завантаження фото й відео вимкнено.';
-  if (req.method === 'POST' && /^\/api\/(assistant\/(triage|summary|plan)|stt\/transcribe)$/.test(url) && !demoAllow(a.ws))
-    return 'Гостьовий ліміт асистента на сьогодні вичерпано. Спробуйте завтра.';
+
+// Денний ліміт запитів до Claude для окремих баз: гостьовий вхід — 40, решта — як задав адміністратор (0 — без обмежень).
+// Повідомлення асистенту рахує сам асистент через allow — і з сайту, і з Telegram.
+const DEMO_LIMIT = 40, aiUse = new Map();
+function allowAI(ws) {
+  const acc = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
+  const limit = acc && acc.role === 'demo' ? DEMO_LIMIT : auth.google.settings().userLimit;
+  if (!limit) return true;
+  const day = new Date().toISOString().slice(0, 10), u = aiUse.get(ws);
+  const n = u && u.day === day ? u.n + 1 : 1;
+  aiUse.set(ws, { day, n });
+  return n <= limit;
+}
+function blocked(a, req, url) {
+  if (url.startsWith('/api/nakladna/') && a.ws) return 'Накладні доступні лише власнику.';
+  if (!a.ws) return null;
+  if (a.role === 'demo' && url === '/api/routines/media' && req.method === 'POST') return 'У гостьовому вході завантаження фото й відео вимкнено.';
+  if (req.method === 'POST' && /^\/api\/(assistant\/(triage|summary|plan)|stt\/transcribe)$/.test(url) && !allowAI(a.ws))
+    return 'Ліміт асистента на сьогодні вичерпано. Спробуйте завтра.';
   return null;
+}
+
+// Медіа окремих баз (/m/u5/<файл>): лише власнику за сесією або за підписаним посиланням (Telegram і сповіщення забирають файл без входу).
+function mediaSecret() {
+  const row = db.prepare("SELECT value FROM meta WHERE key = 'media_secret'").get();
+  if (row) return row.value;
+  const v = crypto.randomBytes(32).toString('hex'); db.prepare("INSERT INTO meta (key, value) VALUES ('media_secret', ?)").run(v); return v;
+}
+const mediaMac = (p, e) => crypto.createHmac('sha256', mediaSecret()).update(`${p}.${e}`).digest('base64url').slice(0, 32);
+function signMedia(u) { const e = Date.now() + 7 * 864e5; return `${u}?e=${e}&s=${mediaMac(u, e)}`; }
+function mediaAllowed(req, url, ws) {
+  const q = new URL(req.url, 'http://x').searchParams, e = +q.get('e'), sig = q.get('s') || '';
+  if (e > Date.now() && sig.length === 32 && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(mediaMac(url, e)))) return true;
+  const a = auth.current(req);
+  return !!(a && a.ws === ws);
+}
+
+// ---------- «Почати спочатку» і видалення акаунта ----------
+const wipe = require('./lib/wipe');
+async function account(req, res, url, a) {
+  const b = await readBody(req, 1024) || {};
+  if (url === '/api/account/reset' && req.method === 'POST') {
+    if (b.confirm !== 'ОЧИСТИТИ') return send(res, 400, { error: 'Підтвердіть словом ОЧИСТИТИ.' });
+    const w = wsOf(a);
+    if (!a.ws) {                                   // основна база власника — перед очищенням знімок поруч із базою
+      const snap = path.join(DATA, `mdmy-before-reset-${new Date().toISOString().slice(0, 10)}.db`);
+      try { if (!fs.existsSync(snap)) db.exec(`VACUUM INTO '${snap.replace(/'/g, "''")}'`); } catch (e) { return send(res, 500, { error: 'Не вдалося зберегти копію перед очищенням.' }); }
+    }
+    wipe(w.db); w.assistant.store.resetDict();
+    if (a.role === 'demo') require('./lib/demo')(w.db, w.assistant);
+    auth.log(a, 'account:reset');
+    return send(res, 200, { ok: true });
+  }
+  if (url === '/api/account/delete' && req.method === 'POST') {
+    if (!a.ws) return send(res, 400, { error: 'Основний акаунт власника не видаляється.' });
+    if (a.role === 'demo') return send(res, 400, { error: 'Гостьовий акаунт не видаляється — можна почати спочатку.' });
+    if (b.confirm !== 'ВИДАЛИТИ') return send(res, 400, { error: 'Підтвердіть словом ВИДАЛИТИ.' });
+    closeWorkspace(a.ws);
+    try { fs.rmSync(DB.wsDir(DATA, a.ws), { recursive: true, force: true }); } catch (e) { console.error('[account] видалення файлів:', e.message); }
+    db.prepare('DELETE FROM sessions WHERE account_id = ?').run(a.id);
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(a.id);
+    auth.log(null, 'account:delete', a.login);
+    return send(res, 200, { ok: true }, { 'Set-Cookie': auth.setCookie(req, '', 0) });
+  }
+  return send(res, 404, { error: 'Не знайдено.' });
 }
 
 // Telegram: один бот (основної бази) — багато чатів. Чат окремої бази знаходимо за її chatId або кодом привʼязки.
@@ -118,10 +172,12 @@ async function api(req, res, url) {
   }
   const a = await auth.handle(req, res, url);
   if (!a) return;                                            // відповідь уже надіслано (вхід, вихід, помилка доступу)
-  const blocked = demoBlocked(a, req, url);
-  if (blocked) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: blocked });
+  const no = blocked(a, req, url);
+  if (no) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: no });
+  if (url.startsWith('/api/account/')) return account(req, res, url, a);
+  if (url.startsWith('/api/admin/')) return auth.google.admin(req, res, url, a);
   const w = wsOf(a);
-  if (url.startsWith('/api/nakladna/')) return a.ws ? send(res, 403, { error: 'Накладні доступні лише власнику.' }) : nakladna.handle(req, res, url, a);
+  if (url.startsWith('/api/nakladna/')) return nakladna.handle(req, res, url, a);
   if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);
   if (url.startsWith('/api/assistant/')) return w.assistant.handle(req, res, url, a, auth.log);
   if (url === '/api/routines' || url.startsWith('/api/routines/')) return w.assistant.routines.handle(req, res, url);
@@ -137,7 +193,7 @@ const server = http.createServer(async (req, res) => {
     if (url.startsWith('/api/')) return await api(req, res, url);
     if (url.startsWith('/m/')) {
       const m = /^\/m\/(u\d+)\//.exec(url);
-      if (m && !db.prepare('SELECT 1 FROM accounts WHERE ws = ?').get(m[1])) { res.writeHead(404); return res.end(); }
+      if (m && (!db.prepare('SELECT 1 FROM accounts WHERE ws = ?').get(m[1]) || !mediaAllowed(req, url, m[1]))) { res.writeHead(404); return res.end(); }
       return workspace(m ? m[1] : null).assistant.routines.serveMedia(req, res, url);
     }
     return serveStatic(req, res, url);

@@ -58,6 +58,23 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
     const out = login || `mdmy-backup-${Date.now()}.db`;
     await db.backup(out);
     console.log('Резервну копію збережено:', out);
+    // окремі бази користувачів (DATA_DIR/ws/<ws>/mdmy.db) — у теку поруч: mdmy-2026-10-19-ws/u5.db; зберігаються 14 останніх тек
+    const wsRoot = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'ws'), fs = require('fs');
+    if (fs.existsSync(wsRoot)) {
+      const dir = out.replace(/\.db$/, '') + '-ws';
+      fs.mkdirSync(dir, { recursive: true });
+      let n = 0;
+      for (const ws of fs.readdirSync(wsRoot)) {
+        const f = path.join(wsRoot, ws, 'mdmy.db');
+        if (!/^u\d+$/.test(ws) || !fs.existsSync(f)) continue;
+        const Database = require('better-sqlite3'), src = new Database(f, { readonly: true, fileMustExist: true });
+        try { await src.backup(path.join(dir, ws + '.db')); n++; } finally { src.close(); }
+      }
+      console.log(`Окремих баз збережено: ${n} → ${dir}`);
+      const parent = path.dirname(path.resolve(dir));
+      fs.readdirSync(parent).filter(x => /^mdmy-.+-ws$/.test(x)).map(x => ({ x, t: fs.statSync(path.join(parent, x)).mtimeMs }))
+        .sort((a, b) => b.t - a.t).slice(14).forEach(({ x }) => fs.rmSync(path.join(parent, x), { recursive: true, force: true }));
+    }
   } else if (cmd === 'import') {
     try {
       const r = require('./lib/import-octotype')(db, login);

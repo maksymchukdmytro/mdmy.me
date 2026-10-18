@@ -21,7 +21,7 @@
   Старі адреси `/speachtotext` → 301 на `/assistant/`.
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
-- `lib/db.js` — схема (PRAGMA user_version, зараз 8): `accounts` (role, ws), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
+- `lib/db.js` — схема (PRAGMA user_version, зараз 9): `accounts` (role, ws, google_sub, email), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
   і таблиці асистента `assistant_*`. Нові зміни схеми — новою міграцією з наступним `user_version`.
 - `public/nakladna/` + `lib/nakladna.js` — видаткові накладні: LP-CRM getOrdersByID; короткий номер (напр. 353) шукається через getStatuses + getOrdersIdByStatus
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
@@ -72,6 +72,17 @@
   Чат власника не можна привʼязати до іншого акаунта; новий чат гостя відвʼязує попередній. Telegram Web App входить у той акаунт, до чиєї бази привʼязаний чат.
   Гостьовий вхід: роль `demo`, `guest` / `guest` (створює міграція v8 на наявній установці; `manage.js demo <логін> <пароль>`), демо-дані — `lib/demo.js`;
   без зміни пароля, сесій, накладних і завантаження медіа; асистент і розшифровка — до 40 запитів на день.
+- Вхід і реєстрація через Google (міграція v9, `lib/google.js`): OIDC authorization code + PKCE + state + nonce (підписаний cookie `mdmy_oauth`, 10 хв);
+  id_token напряму з токен-ендпоінта Google, перевіряються iss / aud / exp / nonce / email_verified; шукаємо за `google_sub`, не за поштою.
+  Новий користувач — `createUser` (роль user, своя база `u<id>`, без пароля: hash = ''), редірект на `/assistant/?welcome=1` (привітання, часовий пояс з пристрою).
+  `?link=1` — привʼязати Google до поточного акаунта (власник теж може входити через Google). Помилки — `/assistant/?auth_error=…`.
+  Налаштування (meta `auth_settings`: Client ID, секрет, signup, userLimit, contact) — розділ «Вхід через Google» лише для адміна; `GET /api/auth/config` — публічно.
+  Адреса повернення: `PUBLIC_URL/api/auth/google/callback`. Тести — макет через `GOOGLE_AUTH_URL` і `GOOGLE_TOKEN_URL`.
+- Обліковий запис (server.js `/api/account/*`): «Почати спочатку» (`reset`, слово ОЧИСТИТИ) — `lib/wipe.js` стирає всі записи й медіа, лишає акаунт, налаштування, Telegram, push;
+  для основної бази перед цим знімок `DATA_DIR/mdmy-before-reset-<дата>.db`; гостю — знову демо-дані. «Видалити акаунт» (`delete`, слово ВИДАЛИТИ) — лише для окремих баз:
+  зупиняє її таймери, видаляє теку `ws/<ws>` і обліковий запис. Ліміт асистента для користувачів — `userLimit` на день (гість — 40), `allowAI` у server.js.
+  Медіа окремих баз `/m/u5/<файл>` — лише за сесією власника або підписаним посиланням `?e=…&s=…` (HMAC, meta `media_secret`, 7 днів) для Telegram і push.
+  Резервні копії: `manage.js backup <файл>` зберігає й окремі бази в теку `<файл без .db>-ws/` (14 останніх). Сторінка `public/privacy.html` (контакт — з `auth/config`).
 - Оформлення повідомлень (константа `FORMAT` у lib/assistant.js — для reply агента, ранкового плану й підсумку; шаблони в lib/telegram.js — так само):
   суть першим реченням, перелік — кожен пункт з нового рядка через «• », групи — абзацами з назвою («Сьогодні:», «Задачі:»), час на початку пункту,
   без Markdown, емодзі — одне-два на повідомлення й лише де доречно. Рядки виконаних дій — «• Задача: …», «• Нагадування … — …».
@@ -97,7 +108,7 @@
   Telegram: long polling без бібліотек, один привʼязаний приватний чат (`/start <код>`), `lastUpdateId` у налаштуваннях; таймер кожні 20 с — нагадування,
   ранковий план після `morningTime` (до 12:00), підсумок після `summaryTime`. Ключ Claude і токен бота — у meta `assistant_settings`, у браузер не віддаються.
   Тести — з макетами через `ANTHROPIC_BASE_URL` і `TELEGRAM_API_BASE`.
-- `manage.js` — CLI: `DATA_DIR=/var/lib/mdmy node manage.js create|password|list|backup|import`.
+- `manage.js` — CLI: `DATA_DIR=/var/lib/mdmy node manage.js create|password|list|admin|user|demo|backup|import`.
 - `lib/import-octotype.js` — одноразове перенесення зі старої бази OctoType (`IMPORT_FROM=… deploy.sh`), лише в порожню базу.
 
 ## Правила

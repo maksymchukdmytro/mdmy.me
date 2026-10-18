@@ -9,10 +9,11 @@
 |---|---|
 | Браузер | `POST /api/login {login, password}` → cookie `mdmy_session`. Кожен не-GET запит — із заголовком `X-MDMY: 1`. |
 | Застосунок (Android тощо) | `POST /api/auth/token {login, password, client: "android"}` → `{token, expiresInDays, account}`. Далі — заголовок `Authorization: Bearer <token>` (без `X-MDMY`). |
+| Google | `GET /api/auth/google/start` → Google → `/api/auth/google/callback` → cookie-сесія й редірект у застосунок (новий користувач — з `?welcome=1`). `?link=1` — привʼязати Google до поточного акаунта. `GET /api/auth/config` → `{google, signup, contact}`. |
 | Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Вхід у той обліковий запис, до якого привʼязаний цей Telegram (підпис `initData` перевіряється токеном бота). |
 
-Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin, demo}`; `demo` — гостьовий вхід з окремими демо-даними),
-`GET /api/sessions` — активні входи, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
+Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin, demo, email, google, hasPassword, own, googleOn}`; `demo` — гостьовий вхід з окремими демо-даними),
+`GET /api/sessions` — активні входи, `POST /api/account/reset {confirm: "ОЧИСТИТИ"}` — стерти всі записи (акаунт лишається), `POST /api/account/delete {confirm: "ВИДАЛИТИ"}` — видалити акаунт і його базу, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
 Обмеження: 8 спроб входу за 10 хвилин з однієї адреси.
 
 ## Модель даних
