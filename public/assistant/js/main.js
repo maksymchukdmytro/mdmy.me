@@ -173,7 +173,7 @@ function phoneMenu() {
 
 // ---------- маршрути (nav.js) ----------
 function pageFor(key, parts) {
-  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space', name: account.name });
+  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
   if (key === 'upcoming') return tasksPage({ key, title: 'Найближчі 7 днів', icon: 'upcoming', area: 'all', view: 'week', group: 'date' });
   if (key === 'all') return tasksPage({ key, title: 'Усі задачі', icon: 'layers', area: 'all', view: 'open', group: 'space' });
   if (key.startsWith('s/')) {
@@ -184,7 +184,7 @@ function pageFor(key, parts) {
   if (key === 'rituals') return ritualsPage(parts[1]);
   if (key === 'record') return recordPage();
   if (key === 'settings') return settingsPage(parts[1]);
-  return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space', name: account.name });
+  return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
 }
 const CRUMB = { today: ['sun', 'Сьогодні'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Усі задачі'], notes: ['note', 'Нотатки'],
                 rituals: ['ritual', 'Ритуали'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };

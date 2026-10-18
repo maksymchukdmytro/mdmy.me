@@ -80,19 +80,56 @@ export function sheet(inner, { cls = '', onClose, label = '' } = {}) {
   dragToClose(el, close);
   return { el, close, wrap: w };
 }
-// Потягнути вниз за «ручку» (верхня смужка або шапка) — закрити
+// Свайп униз — закрити. Палець: будь-де на аркуші, якщо його вміст прокручено до верху (інакше — звичайна прокрутка);
+// для картки задачі (phoneOnly) — за шапку або будь-де, коли її вміст угорі. Миша — лише за «ручку».
 export function dragToClose(el, close, handle = '.sheet-grab, .sheet-head, .panel-top', phoneOnly = false) {
+  const scroller = () => el.querySelector('.panel-body') || el;
+  let y0 = 0, x0 = 0, t0 = 0, dy = 0, mode = '', fromHandle = false;
+  const reset = () => { el.style.transition = ''; el.style.transform = ''; };
+  el.addEventListener('touchstart', e => {
+    if (phoneOnly && !isPhone()) { mode = 'off'; return; }
+    const t = e.touches[0]; y0 = t.clientY; x0 = t.clientX; t0 = Date.now(); dy = 0;
+    fromHandle = !!e.target.closest(handle);
+    mode = e.touches.length > 1 || e.target.closest('textarea, input, .cmp-chips, .rt-strip, .sp-cards, .board') ? 'off' : '';
+  }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (mode === 'off' || mode === 'scroll') return;
+    const t = e.touches[0], d = t.clientY - y0, dx = t.clientX - x0;
+    if (!mode) {
+      if (Math.abs(d) < 6 && Math.abs(dx) < 6) return;
+      // тягнемо вниз, коли вміст уже вгорі (або за ручку) — це закриття; інакше — прокрутка
+      if (d > 0 && Math.abs(d) > Math.abs(dx) && (fromHandle || scroller().scrollTop <= 0)) { mode = 'drag'; el.style.transition = 'none'; }
+      else { mode = 'scroll'; return; }
+    }
+    if (e.cancelable) e.preventDefault();
+    dy = Math.max(0, d);
+    el.style.transform = `translateY(${dy < 0 ? 0 : dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (mode !== 'drag') { mode = ''; return; }
+    mode = '';
+    el.style.transition = '';
+    if (dy > 90 || (dy > 30 && dy / (Date.now() - t0) > 0.45)) close(); else el.style.transform = '';
+    // після перетягування не «клікаємо» по пункту під пальцем
+    if (dy > 8) {
+      const eat = ev => { ev.preventDefault(); ev.stopPropagation(); };
+      el.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => el.removeEventListener('click', eat, { capture: true }), 350);
+    }
+  };
+  el.addEventListener('touchend', end); el.addEventListener('touchcancel', () => { mode = ''; reset(); });
+  // миша (компʼютер): лише за ручку
   el.addEventListener('pointerdown', e => {
-    if ((phoneOnly && !isPhone()) || e.button > 0 || !e.target.closest(handle) || e.target.closest('button, input, a, textarea')) return;
-    const y0 = e.clientY, t0 = Date.now(); let dy = 0;
+    if (e.pointerType !== 'mouse' || (phoneOnly && !isPhone()) || e.button > 0 || !e.target.closest(handle) || e.target.closest('button, input, a, textarea')) return;
+    const y = e.clientY, t = Date.now(); let d = 0;
     el.style.transition = 'none';
-    const move = ev => { dy = Math.max(0, ev.clientY - y0); el.style.transform = `translateY(${dy}px)`; };
+    const move = ev => { d = Math.max(0, ev.clientY - y); el.style.transform = `translateY(${d}px)`; };
     const up = () => {
-      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up);
       el.style.transition = '';
-      if (dy > 90 || (dy > 30 && dy / (Date.now() - t0) > 0.5)) close(); else el.style.transform = '';
+      if (d > 90 || (d > 30 && d / (Date.now() - t) > 0.5)) close(); else el.style.transform = '';
     };
-    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+    addEventListener('pointermove', move); addEventListener('pointerup', up);
   });
 }
 

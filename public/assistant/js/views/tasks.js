@@ -14,13 +14,15 @@ const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
 const VIEWS = [['open', 'Будь-коли'], ['today', 'Сьогодні й прострочене'], ['overdue', 'Прострочене'], ['week', 'Найближчі 7 днів'], ['nodate', 'Без строку']];
 const SORTS = [['smart', 'За строком'], ['prio', 'За пріоритетом'], ['created', 'Спершу нові'], ['alpha', 'За алфавітом'], ['manual', 'Вручну (як на дошці)']];
 const GROUPS = [['date', 'За строком'], ['status', 'За статусом'], ['space', 'За простором'], ['none', 'Без груп']];
+const TOD = { late: 'Прострочене', morning: 'Зранку', day: 'Вдень', evening: 'Увечері', nodate: 'Без часу' };
 
 export function tasksPage(cfg) {
   const K = k => `tasks:${cfg.key}:${k}`;
   const st = {
     mode: pref.get(K('mode'), 'list'), sort: pref.get(K('sort'), 'smart'), group: pref.get(K('group'), cfg.group || 'date'),
     view: cfg.view, q: '', tag: '', prio: 0, showDone: false,
-    items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0, collapsed: new Set(pref.get(K('collapsed'), []))
+    items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0,
+    collapsed: new Set(pref.get(K('collapsed'), cfg.key === 'today' ? ['donetoday'] : [])), rituals: []
   };
   const fixedView = cfg.view !== 'open';
   const isToday = cfg.key === 'today';
@@ -41,7 +43,7 @@ export function tasksPage(cfg) {
       <div class="page-head">
         ${isToday ? `<p class="overline">${esc(greeting().date)}</p><h1 class="page-title">${esc(greeting().text)}</h1>` : `<h1 class="page-title">${esc(cfg.title)}</h1>`}
       </div>
-      ${isToday ? '<div class="sp-cards"></div><div class="rt-strip" hidden></div><p class="sec-label phone-block">Задачі на сьогодні</p>' : ''}
+      ${isToday ? '<div class="day-card" hidden></div><div class="rt-strip" hidden></div>' : ''}
       <div class="inbox-bar" hidden></div>
       <div class="vbar">
         <div class="vtabs" role="tablist">
@@ -65,7 +67,7 @@ export function tasksPage(cfg) {
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onKeyIn);
     longPress(); swipe();
-    offMeta = onMeta(drawCards);
+    offMeta = onMeta(() => drawDay());
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
     document.addEventListener('keydown', onKey);
@@ -95,7 +97,7 @@ export function tasksPage(cfg) {
     return p;
   }
   async function load(more) {
-    const strip = $('.rt-strip', root); if (strip && !more) { todayRituals(strip); drawCards(); }
+    const strip = $('.rt-strip', root); if (strip && !more) todayRituals(strip).then(l => { st.rituals = l || []; drawDay(); });
     const my = ++st.loading, box = $('.tcontent', root);
     if (!more) box.classList.add('busy');
     try {
@@ -118,22 +120,33 @@ export function tasksPage(cfg) {
     draw();
   }
   function draw() {
-    syncBar(); drawInbox();
+    syncBar(); drawInbox(); drawDay();
     if (st.mode === 'board') drawBoard(); else drawList();
     drawBulk();
   }
   const refresh = () => load();
 
-  // ---------- картки просторів на «Сьогодні» ----------
-  function drawCards() {
-    const box = $('.sp-cards', root); if (!box) return;
-    const c = meta.counts || {}, open = c.spaces || {}, d7 = c.done7 || {};
-    const list = openSpaces().filter(s => s.key !== 'inbox' || open.inbox);
-    box.innerHTML = list.map((s, i) => {
-      const o = open[s.key] || 0, d = d7[s.key] || 0, p = o + d ? d / (o + d) : 0;
-      return `<a class="sp-card" href="#/s/${s.key}" style="--p:${p.toFixed(3)};--i:${i}">
-        <small>${o} ${o === 1 ? 'задача' : o > 1 && o < 5 ? 'задачі' : 'задач'}</small><b>${icon(s.icon, 16)}${esc(s.name)}</b><i class="sp-bar"><i></i></i></a>`;
-    }).join('');
+  // ---------- «Сьогодні»: картка дня — скільки зроблено, що далі ----------
+  function drawDay() {
+    const box = $('.day-card', root); if (!box || st.mode !== 'list') { if (box) box.hidden = true; return; }
+    const now = Date.now(), hm = d => { const x = new Date(d); return `${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; };
+    const open = st.items.length, doneT = (st.doneToday || []).length;
+    const rDone = st.rituals.reduce((s, r) => s + (r.active ? r.done : 0), 0), rTotal = st.rituals.reduce((s, r) => s + (r.active ? r.total : 0), 0);
+    const done = doneT + rDone, total = done + open + Math.max(0, rTotal - rDone);
+    const late = st.items.filter(it => it.overdue && !(it.kind === 'reminder' && it.sent)).length;
+    // що далі: найближча задача з часом або раз ритуалу
+    const nextTask = st.items.filter(it => it.due_at && it.due_at >= now).sort((a, b) => a.due_at - b.due_at)[0];
+    const nextRit = st.rituals.filter(r => r.active && (r.pending || r.next)).map(r => ({ r, at: r.pending ? now : (() => { const d = new Date(); d.setHours(+r.next.slice(0, 2), +r.next.slice(3), 0, 0); return d.getTime(); })() }))
+      .sort((a, b) => a.at - b.at)[0];
+    let next = '';
+    if (nextRit && (!nextTask || nextRit.at <= nextTask.due_at)) next = `<a class="dc-next" href="#/r/${nextRit.r.id}"><small>${nextRit.r.pending ? 'Зараз' : 'Далі о ' + nextRit.r.next}</small><span>${esc(nextRit.r.icon + ' ' + nextRit.r.title)}</span></a>`;
+    else if (nextTask) next = `<a class="dc-next" href="${taskHref(nextTask.id)}"><small>Далі о ${hm(nextTask.due_at)}</small><span>${esc(nextTask.text)}</span></a>`;
+    else if (open) next = `<span class="dc-next"><small>Ще ${open} ${open === 1 ? 'задача' : open < 5 ? 'задачі' : 'задач'}</small><span>без точного часу</span></span>`;
+    const p = total ? done / total : 0, R = 26, C = 2 * Math.PI * R;
+    box.hidden = !total;
+    box.innerHTML = `<div class="dc-ring"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="${R}" class="dc-bg"/><circle cx="32" cy="32" r="${R}" class="dc-fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - p)}"/></svg><b>${done}<small>/${total}</small></b></div>
+      <div class="dc-txt"><b>${!total ? '' : done >= total ? 'Усе на сьогодні зроблено' : done ? `Зроблено ${done} з ${total}` : `На сьогодні ${total}`}</b>
+        ${late ? `<span class="dc-late">Прострочено: ${late}</span>` : ''}${done >= total ? '<span class="dc-sub">Можна видихнути 🌿</span>' : next}</div>`;
   }
 
   // ---------- «Вхідні» ----------
@@ -153,10 +166,17 @@ export function tasksPage(cfg) {
     if (st.group === 'status') return [it.status, status(it.status).name];
     if (st.group === 'space') return [it.area, space(it.area).name];
     if (st.group === 'date') { const b = dueBucket(it); return [b, BUCKETS[b]]; }
+    if (st.group === 'tod') {
+      if (it.overdue && !(it.kind === 'reminder' && it.sent)) return ['late', TOD.late];
+      if (!it.due_at) return ['nodate', TOD.nodate];
+      const h = new Date(it.due_at).getHours(), k = h < 12 ? 'morning' : h < 17 ? 'day' : 'evening';
+      return [k, TOD[k]];
+    }
     return ['all', ''];
   }
   const ORDER = {
     date: Object.keys(BUCKETS),
+    tod: Object.keys(TOD),
     status: () => meta.statuses.map(s => s.key),
     space: () => meta.spaces.map(s => s.key)
   };
@@ -178,7 +198,7 @@ export function tasksPage(cfg) {
       const rowN = () => n < 14 ? n++ : 14;
       box.innerHTML = add + keys.map(k => {
         const g = groups.get(k), hid = st.collapsed.has(k);
-        const head = g.l ? `<button type="button" class="grp-h${k === 'overdue' ? ' late' : ''}" data-grp="${esc(k)}">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}${
+        const head = g.l ? `<button type="button" class="grp-h${k === 'overdue' || k === 'late' ? ' late' : ''}" data-grp="${esc(k)}">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}${
           st.group === 'space' && !st.showDone ? icon(space(k).icon, 14) : st.group === 'status' && !st.showDone ? icon(STATUS_ICON[k] || 'circle', 14) : ''}<span>${esc(g.l)}</span><b>${g.list.length}</b></button>` : '';
         return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it, false, rowN()) + it.children.map(c => rowHtml(c, true, rowN())).join('')).join('')}</div></section>`;
       }).join('');
@@ -202,7 +222,7 @@ export function tasksPage(cfg) {
         openSpaces().length > 4 ? `<button type="button" class="qchip" data-a="area-menu" title="Інший простір">${icon('more', 12)}</button>` : ''}</span>`);
     }
     if (it.status !== firstStatus() && !it.done) out.push(`<span class="prop st-${it.status}">${icon(STATUS_ICON[it.status] || 'circle', 13)}${esc(status(it.status).name)}</span>`);
-    if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
+    if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(isToday && st.group === 'tod' && dueBucket(it) === 'today' ? fmtDue(it.due_at).replace('Сьогодні ', '') : fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
     if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
     if (it.tags && it.tags.length && !child) out.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
     if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
@@ -577,8 +597,9 @@ export function tasksPage(cfg) {
       if (k === 'accept') acceptAll();
       if (k === 'ai-add') aiAdd($('.qadd-in', root));
       if (k === 'look') {
+        const groups = isToday ? [['tod', 'За часом дня'], ...GROUPS] : GROUPS;
         const v = await menu(t, [{ head: 'Сортування' }, ...SORTS.map(([v, l]) => ({ value: 's:' + v, label: l, checked: st.sort === v })),
-                                 { head: 'Групи' }, ...GROUPS.map(([v, l]) => ({ value: 'g:' + v, label: l, checked: st.group === v }))], { width: 230 });
+                                 { head: 'Групи' }, ...groups.map(([v, l]) => ({ value: 'g:' + v, label: l, checked: st.group === v }))], { width: 230 });
         if (v && v[0] === 's') { st.sort = v.slice(2); pref.set(K('sort'), st.sort); load(); }
         if (v && v[0] === 'g') { st.group = v.slice(2); pref.set(K('group'), st.group); drawList(); }
       }

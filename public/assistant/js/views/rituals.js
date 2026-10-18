@@ -271,9 +271,10 @@ function upload(blob, onProgress) {
 
 // ---------- смужка на «Сьогодні» ----------
 export async function todayRituals(box) {
-  let d; try { d = await get('routines'); } catch (e) { box.hidden = true; return; }
+  let d; try { d = await get('routines'); } catch (e) { box.hidden = true; return []; }
   const list = d.list.filter(r => r.active && r.total);
   box.hidden = !list.length;
   box.innerHTML = list.map(r => `<a class="rt-chip${r.pending ? ' pending' : ''}${r.done >= r.total ? ' full' : ''}" href="#/r/${r.id}" style="--p:${r.total ? r.done / r.total : 0}">
     <span class="rt-ring"><span>${esc(r.icon)}</span></span><span class="rt-t"><b>${esc(r.title)}</b><small>${r.pending ? 'зараз' : `${r.done}/${r.total}${r.next ? ' · ' + r.next : ''}`}</small></span></a>`).join('');
+  return list;
 }

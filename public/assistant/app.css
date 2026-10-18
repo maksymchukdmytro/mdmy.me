@@ -452,7 +452,8 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .sheet-wrap.in{background:var(--scrim)}
 .sheet{width:min(560px,100%);max-height:88vh;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;padding:6px 8px calc(14px + env(safe-area-inset-bottom));box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .34s var(--spring);overscroll-behavior:contain}
 .sheet-wrap.in .sheet{transform:none}
-.sheet-grab{width:38px;height:5px;border-radius:3px;background:var(--line-2);margin:4px auto 6px;flex:none;cursor:grab;touch-action:none}
+.sheet-grab{position:relative;width:38px;height:5px;border-radius:3px;background:var(--line-2);margin:4px auto 6px;flex:none;cursor:grab;touch-action:none}
+.sheet-grab::after{content:'';position:absolute;inset:-14px -120px}   /* більша зона для пальця */
 .sheet-head{display:flex;align-items:center;justify-content:center;padding:4px 12px 10px;font-size:15px;touch-action:none}
 .sheet .pop-item{min-height:50px;font-size:16px;border-radius:10px;padding:0 12px;gap:12px}
 .sheet .pop-ic{color:var(--text-2)}
@@ -672,8 +673,26 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .m-item:active{background:var(--active)}
 .m-item.add{color:var(--text-2)}
 
+/* ---------- «Сьогодні»: картка дня ---------- */
+.day-card{display:flex;align-items:center;gap:16px;margin:2px 0 14px;padding:16px 18px;border-radius:20px;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 30px rgba(15,15,15,.14);animation:rowIn .45s var(--ease) both}
+.dc-ring{position:relative;flex:none;width:64px;height:64px}
+.dc-ring svg{width:64px;height:64px;transform:rotate(-90deg)}
+.dc-ring circle{fill:none;stroke-width:6}
+.dc-bg{stroke:color-mix(in srgb,var(--accent-ink) 18%,transparent)}
+.dc-fg{stroke:var(--accent-ink);stroke-linecap:round;transition:stroke-dashoffset .9s var(--ease)}
+.dc-ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dc-ring b small{font-size:12px;font-weight:500;opacity:.6;margin-left:1px}
+.dc-ring b{display:flex;align-items:baseline;justify-content:center;padding-top:20px}
+.dc-txt{min-width:0;display:flex;flex-direction:column;gap:3px}
+.dc-txt>b{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.dc-next{display:flex;flex-direction:column;text-decoration:none;color:inherit;min-width:0}
+.dc-next small,.dc-sub{color:color-mix(in srgb,var(--accent-ink) 62%,transparent);font-size:13px}
+.dc-next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14.5px}
+.dc-late{display:inline-flex;align-self:flex-start;padding:1px 8px;border-radius:999px;background:var(--red);color:#fff;font-size:12px;font-weight:600}
+@media (min-width:900px){.day-card{max-width:560px}}
+
 /* ---------- кнопка «+» і нова задача на весь екран ---------- */
-.fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:36;width:58px;height:58px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(15,15,15,.22),0 2px 6px rgba(15,15,15,.12);transition:transform .18s var(--spring),opacity .2s;animation:fabIn .45s var(--spring) both .1s}
+.fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:36;width:58px;height:58px;padding:0;border-radius:50%;border:0;display:grid;place-items:center;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(15,15,15,.22),0 2px 6px rgba(15,15,15,.12);transition:transform .18s var(--spring),opacity .2s;animation:fabIn .45s var(--spring) both .1s}
 .fab:active{transform:scale(.9)}
 @keyframes fabIn{from{transform:scale(0) rotate(-90deg)}}
 .has-panel .fab,.bulk-on .fab,.selecting .fab{transform:scale(0);opacity:0;pointer-events:none}
@@ -802,6 +821,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
   .sub{min-height:44px}.sub-add{min-height:46px}
   .sub-go{width:36px;height:36px}
   .phone-only{display:inline-flex!important}
+  .fab.phone-only{display:grid!important}
   .sheet-grab.phone-only{display:block!important}
   /* шапка: на телефоні ховається; з прокруткою виїжджає з назвою сторінки */
   .topbar{position:fixed;left:0;right:0;top:0;height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 12px 0;justify-content:center;
