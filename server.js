@@ -19,6 +19,7 @@ const auth = require('./lib/auth')(db);
 const nakladna = require('./lib/nakladna')(db, auth.log);
 const stt = require('./lib/stt')();
 const assistant = require('./lib/assistant').get(db);
+const push = require('./lib/push').get(db);
 
 // ---------- сторінки ----------
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
@@ -52,11 +53,13 @@ function serveStatic(req, res, url) {
 // ---------- API ----------
 async function api(req, res, url) {
   if (url === '/api/ping') return send(res, 200, { ok: true });
+  if (url === '/api/push/action' && req.method === 'POST') return assistant.pushAction(req, res);   // кнопка в сповіщенні, без сесії
   const a = await auth.handle(req, res, url);
   if (!a) return;                                            // відповідь уже надіслано (вхід, вихід, помилка доступу)
   if (url.startsWith('/api/nakladna/')) return nakladna.handle(req, res, url, a);
   if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);
   if (url.startsWith('/api/assistant/')) return assistant.handle(req, res, url, a, auth.log);
+  if (url.startsWith('/api/push/')) return push.handle(req, res, url, a);
   return send(res, 404, { error: 'Не знайдено.' });
 }
 

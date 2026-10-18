@@ -3,6 +3,7 @@ import { get, post, patch, del, api } from '../api.js';
 import { icon, SPACE_ICONS } from '../icons.js';
 import { $, $$, esc, pref, toast, fail, menu, confirmBox, fmtDate } from '../ui.js';
 import { meta, refreshMeta } from '../store.js';
+import * as push from '../push.js';
 
 const TZ = [['Europe/Kyiv', 'Київ'], ['Europe/Chisinau', 'Кишинів'], ['Europe/Warsaw', 'Варшава'], ['Europe/Berlin', 'Берлін'], ['Europe/Prague', 'Прага'], ['Europe/London', 'Лондон'], ['America/New_York', 'Нью-Йорк']];
 const CLIENT = { web: 'Браузер', android: 'Android', telegram: 'Telegram', app: 'Застосунок' };
@@ -13,7 +14,7 @@ export function settingsPage(sub) {
     root = el;
     root.innerHTML = `<div class="page settings">
       <div class="page-head"><div class="page-icon">${icon('settings', 30)}</div><h1 class="page-title">Налаштування</h1></div>
-      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
+      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
         .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}">${l}</a>`).join('')}</nav>
 
       <section class="set" id="set-spaces">
@@ -30,6 +31,13 @@ export function settingsPage(sub) {
         <div class="kv"><span>Модель</span><div><input data-f="model" placeholder="claude-haiku-5-5"></div></div>
       </section>
 
+      <section class="set" id="set-notify">
+        <h2>Сповіщення</h2>
+        <p class="muted">Нагадування, ранковий план і підсумок дня приходять прямо на телефон чи компʼютер — навіть коли mdmy закрито. У нагадуванні є кнопки «Готово» і «+1 год». Працює паралельно з Telegram.</p>
+        <div class="push-state"></div>
+        <div class="push-devices"></div>
+      </section>
+
       <section class="set" id="set-tg">
         <h2>Telegram</h2>
         <p class="muted">Бот приймає голосові й текст, надсилає нагадування, ранковий план і підсумок дня, а кнопка «Задачі» в ньому відкриває цей застосунок. Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (<code>/newbot</code>) і вставте токен.</p>
@@ -40,8 +48,8 @@ export function settingsPage(sub) {
       <section class="set" id="set-plan">
         <h2>Розклад</h2>
         <div class="kv"><span>Часовий пояс</span><div><select data-f="tz">${TZ.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div></div>
-        <div class="kv"><span>Ранковий план</span><div class="inline"><input type="time" data-f="morningTime" max="11:59"><label class="switch"><input type="checkbox" data-f="morningOn"><span>надсилати в Telegram</span></label></div></div>
-        <div class="kv"><span>Підсумок дня</span><div class="inline"><input type="time" data-f="summaryTime"><label class="switch"><input type="checkbox" data-f="summaryOn"><span>надсилати в Telegram</span></label></div></div>
+        <div class="kv"><span>Ранковий план</span><div class="inline"><input type="time" data-f="morningTime" max="11:59"><label class="switch"><input type="checkbox" data-f="morningOn"><span>надсилати (сповіщення й Telegram)</span></label></div></div>
+        <div class="kv"><span>Підсумок дня</span><div class="inline"><input type="time" data-f="summaryTime"><label class="switch"><input type="checkbox" data-f="summaryOn"><span>надсилати (сповіщення й Telegram)</span></label></div></div>
         <div class="kv"><span>Мова голосових у Telegram</span><div><select data-f="voiceLang"><option value="uk">Українська</option><option value="ru">Русский</option><option value="auto">Авто</option></select></div></div>
       </section>
       <div class="set-save"><p class="err"></p><button type="button" class="btn primary" data-a="save">Зберегти</button></div>
@@ -69,7 +77,7 @@ export function settingsPage(sub) {
     root.addEventListener('click', onClick);
     root.addEventListener('change', onChange);
     $$('[data-theme]', root).forEach(b => b.setAttribute('aria-checked', String(b.dataset.theme === pref.get('theme', 'system'))));
-    drawSpaces(); load(); loadSessions();
+    drawSpaces(); load(); loadSessions(); drawPush();
     if (sub) setTimeout(() => { const t = $('#set-' + sub, root); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   }
   async function load() {
@@ -115,6 +123,24 @@ export function settingsPage(sub) {
   }
   async function saveSpace(key, body) {
     try { await patch('assistant/spaces/' + key, body); await refreshMeta(); } catch (e) { fail(e); }
+  }
+
+  // ---------- сповіщення ----------
+  async function drawPush() {
+    const st = await push.status(), box = $('.push-state', root);
+    let html;
+    if (!st.supported) html = st.needsInstall
+      ? `<p>${icon('device', 14)} На iPhone сповіщення працюють лише в установленому застосунку: Safari → «Поділитися» → «На початковий екран», потім відкрийте mdmy звідти.</p>`
+      : `<p class="muted">${icon('x', 14)} Цей браузер не підтримує сповіщення. Спробуйте Chrome, Edge, Firefox або Samsung Internet.</p>`;
+    else if (st.permission === 'denied') html = `<p>${icon('x', 14)} Сповіщення для mdmy.me заборонено в браузері. Відкрийте налаштування сайту (значок 🔒 біля адреси) → Сповіщення → Дозволити, і оновіть сторінку.</p>`;
+    else if (st.subscribed) html = `<p>${icon('checkCircle', 14)} Увімкнено на цьому пристрої.</p><div class="row-act"><button type="button" class="btn sm" data-a="push-test">${icon('bell', 14)}Надіслати тестове</button><button type="button" class="btn sm ghost" data-a="push-off">Вимкнути тут</button></div>`;
+    else html = `<p class="muted">На цьому пристрої вимкнено.</p><button type="button" class="btn sm primary" data-a="push-on">${icon('bell', 14)}Увімкнути на цьому пристрої</button>`;
+    box.innerHTML = html;
+    try {
+      const { list } = await get('push/subscriptions');
+      $('.push-devices', root).innerHTML = list.length ? `<p class="small muted" style="margin:12px 0 4px">Пристрої, що отримують сповіщення:</p>` + list.map(d => `<div class="sess">${icon('bell', 16)}<span><b>${esc(d.device || 'Пристрій')}</b></span>
+        <span class="muted small">${d.last_ok ? 'останнє ' + esc(fmtDate(d.last_ok)) : 'з ' + esc(fmtDate(d.created))}</span><button type="button" class="icon-btn xs" data-a="push-del" data-id="${d.id}" title="Прибрати">${icon('x', 14)}</button></div>`).join('') : '';
+    } catch (e) {}
   }
 
   // ---------- пристрої ----------
@@ -165,6 +191,10 @@ export function settingsPage(sub) {
       try { await post('password', { old: o.value, password: n.value }); o.value = ''; n.value = ''; toast('Пароль змінено. Інші пристрої вийдуть із системи.'); } catch (err) { fail(err); }
     }
     if (k === 'logout') window.MDMY.logout();
+    if (k === 'push-on') { a.disabled = true; try { await push.enable(); toast('Сповіщення увімкнено'); } catch (err) { fail(err); } drawPush(); }
+    if (k === 'push-off') { await push.disable(); toast('Вимкнено на цьому пристрої'); drawPush(); }
+    if (k === 'push-test') { try { const r = await push.test(); toast(r.sent ? `Надіслано на пристроїв: ${r.sent}` : 'Не вдалося надіслати — спробуйте вимкнути й увімкнути знову'); } catch (err) { fail(err); } }
+    if (k === 'push-del') { try { await post('push/unsubscribe', { id: +a.dataset.id }); drawPush(); } catch (err) { fail(err); } }
   }
   async function onChange(e) {
     const row = e.target.closest('[data-key]'); if (!row) return;

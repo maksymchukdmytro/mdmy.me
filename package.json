@@ -12,7 +12,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0"
+    "better-sqlite3": "^11.10.0",
+    "web-push": "^3.6.7"
   },
   "license": "MIT"
 }

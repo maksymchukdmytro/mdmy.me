@@ -39,6 +39,10 @@
   API для всіх клієнтів (веб, Android, Telegram Web App) — `docs/API.md`; змінюючи API, оновлюйте й цей файл.
 - Вхід для застосунків: `POST /api/auth/token` → Bearer-токен; Telegram Web App: `POST /api/auth/telegram` (initData, лише власник привʼязаного бота).
   Бот ставить кнопку меню «Задачі» на `PUBLIC_URL/assistant/` (`PUBLIC_URL` задає deploy.sh у службі).
+- Push-сповіщення (міграція v4, `push_subscriptions`): `lib/push.js` (бібліотека `web-push`, ключі VAPID у meta `push_vapid`, підписані токени кнопок),
+  сервіс-воркер `public/assistant/sw.js` (без кешування; кнопки «Готово» / «+1 год» → `POST /api/push/action`), фронтенд `js/push.js` + розділ «Сповіщення» в налаштуваннях
+  і одноразова пропозиція увімкнути. Таймер асистента шле нагадування в усі канали (Telegram і push); невідправлені нагадування, прострочені понад 12 год, не надсилаються.
+  Іконки застосунку й сповіщень: `public/assistant/icon-*.png`, `badge-96.png` (одноколірна для рядка стану Android).
 - `lib/stt.js` → Python-служба `services/stt` (`/health`, `/transcribe`). Аудіо на сервері не зберігається.
 - Асистент: `lib/assistant.js` (агент, таймер, API `/api/assistant/*`) + `lib/assistant-store.js` (усі зміни даних) + `lib/assistant-time.js` (часові пояси, повтори) + `lib/telegram.js` (бот).
   Агент: текст → Claude API (за замовч. `claude-haiku-5-5`) з інструментами `search_memory` (FTS по всьому сказаному), `get_state` (стан/звички) і фінальним `save_actions`;

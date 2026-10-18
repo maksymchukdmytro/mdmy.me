@@ -69,6 +69,21 @@
 
 Голос: `POST /api/stt/transcribe?lang=uk|ru|en|auto`, тіло — сирі байти аудіо (webm/ogg/m4a/wav, до 20 МБ) → `{text, duration, …}`; `GET /api/stt/health`.
 
+## Push-сповіщення (Web Push)
+
+| Метод і шлях | Що робить |
+|---|---|
+| `GET /api/push/key` | Публічний VAPID-ключ для `pushManager.subscribe({applicationServerKey})` |
+| `POST /api/push/subscribe {subscription}` | Зберегти підписку пристрою (`subscription.toJSON()`) |
+| `POST /api/push/unsubscribe {endpoint}` або `{id}` | Прибрати підписку |
+| `GET /api/push/subscriptions` | Пристрої, що отримують сповіщення |
+| `POST /api/push/test` | Тестове сповіщення на всі пристрої |
+| `POST /api/push/action {token, action: done · snooze}` | Кнопки в сповіщенні; без сесії — `token` підписаний сервером і діє для однієї задачі 3 доби |
+
+Що приходить у push (JSON): `{kind: "reminder" · "text", title, body, url, tag, id?, token?, actions?}`.
+Надсилаються нагадування (одночасно з Telegram, якщо його привʼязано), ранковий план і підсумок дня. Майбутній Android-застосунок
+може отримувати ті самі події через FCM.
+
 ## Telegram Web App
 
 Бот сам ставить кнопку меню «Задачі», що відкриває `https://<домен>/assistant/` (змінна середовища `PUBLIC_URL` у службі `mdmy`).

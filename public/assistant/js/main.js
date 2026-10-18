@@ -11,6 +11,7 @@ import { statePage } from './views/state.js';
 import { recordPage } from './views/record.js';
 import { settingsPage } from './views/settings.js';
 import { parse, go, taskHref } from './nav.js';
+import * as push from './push.js';
 
 const app = $('#app');
 let account = null, current = null, currentKey = '';
@@ -241,6 +242,23 @@ async function boot() {
   current = null; currentKey = ''; currentPage = '';
   shell();
   route();
+  push.registerSW().then(() => setTimeout(offerPush, 2500));
+}
+
+// Один раз на пристрої пропонуємо увімкнути сповіщення (нагадування приходитимуть, навіть коли сайт закритий)
+async function offerPush() {
+  if (pref.get('pushAsked', false) || !account) return;
+  const s = await push.status();
+  if (!s.supported || s.permission !== 'default' || s.subscribed) return;
+  const box = document.createElement('div'); box.className = 'offer';
+  box.innerHTML = `<div class="offer-ic">${icon('bell', 20)}</div><div class="offer-t"><b>Сповіщення на цьому пристрої</b><span>Нагадування, ранковий план і підсумок дня — навіть коли mdmy закрито.</span></div>
+    <div class="offer-a"><button type="button" class="btn sm ghost" data-v="0">Не зараз</button><button type="button" class="btn sm primary" data-v="1">Увімкнути</button></div>`;
+  document.body.append(box);
+  box.addEventListener('click', async e => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    pref.set('pushAsked', true); box.remove();
+    if (b.dataset.v === '1') { try { await push.enable(); toast('Сповіщення увімкнено'); } catch (err) { toast(err.message); } }
+  });
 }
 export async function logout() {
   try { await post('logout'); } catch (e) {}
