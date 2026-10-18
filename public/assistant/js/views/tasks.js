@@ -660,17 +660,23 @@ export function tasksPage(cfg) {
     }
     if (act === 'sel') { toggleSel(id, a.checked); return; }
     if (act === 'done') {
-      const it = findItem(id); if (!it) return;
-      a.classList.toggle('on'); a.classList.add('pop');
-      if (!it.done) { row.classList.add('completing'); if (navigator.vibrate) navigator.vibrate(12); }
+      const it = findItem(id); if (!it || row.classList.contains('completing')) return;
+      // виконано: кружечок заповнюється й галочка малюється → лінія закреслює назву → рядок спокійно згортається
+      if (!it.done) { a.classList.add('on', 'bump'); row.classList.add('completing'); if (navigator.vibrate) navigator.vibrate(12); }
+      else a.classList.remove('on');
       try {
-        // анімація (галочка → закреслення → рядок згортається) іде паралельно із запитом
-        const [r] = await Promise.all([post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`), wait(it.done ? 0 : 420)]);
+        const [r] = await Promise.all([post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`), wait(it.done ? 0 : 700)]);
         if (r.next) toast('Наступний раз: ' + fmtDue(r.next));
         else if (!it.done) toast('Виконано', async () => { await post(`assistant/items/${id}/reopen`); changed(); });
-        if (!it.done && !r.next && !isToday) { row.style.height = row.offsetHeight + 'px'; row.classList.add('collapse'); await wait(220); }
+        if (!it.done && !r.next) {
+          const rows = [row, ...$$(`.row[data-parent="${id}"]`, root)];
+          rows.forEach(x => { x.style.height = x.offsetHeight + 'px'; });
+          row.offsetHeight;                                   // зафіксувати висоту перед згортанням
+          rows.forEach(x => x.classList.add('collapse'));
+          await wait(320);
+        }
         changed();
-      } catch (err) { fail(err); a.classList.toggle('on'); row.classList.remove('completing'); }
+      } catch (err) { fail(err); a.classList.toggle('on', it.done); a.classList.remove('bump'); row.classList.remove('completing'); }
       return;
     }
     if (act === 'area' || act === 'area-menu') {

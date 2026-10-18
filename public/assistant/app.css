@@ -472,11 +472,23 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 @keyframes viewIn{from{opacity:0;transform:translateY(8px)}}
 .stagger .row{animation:rowIn .36s var(--ease) both;animation-delay:calc(var(--i,0) * 22ms)}
 @keyframes rowIn{from{opacity:0;transform:translateY(6px)}}
-.chk.pop{animation:chkPop .38s var(--spring)}
 @keyframes chkPop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
-.row .row-title{background:linear-gradient(currentColor,currentColor) 0 55%/0 1.5px no-repeat;transition:background-size .32s var(--ease),color .2s}
+/* виконання: кружечок заповнюється з легким пружним «поштовхом», галочка малюється, від кружечка — тонке кільце;
+   далі тонка лінія закреслює назву, текст тьмяніє; рядок плавно зсувається й згортається */
+.chk{position:relative}
+.chk .ic path{stroke-dasharray:26;stroke-dashoffset:0}
+.chk.bump{animation:chkBump .42s var(--spring)}
+.chk.bump .ic path{animation:chkDraw .28s var(--ease) .08s both}
+.chk.bump::after{content:'';position:absolute;inset:-2px;border-radius:50%;border:1.5px solid var(--accent);opacity:0;animation:chkRing .55s var(--ease) .05s}
+@keyframes chkBump{0%{transform:scale(.82)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes chkDraw{from{stroke-dashoffset:26}to{stroke-dashoffset:0}}
+@keyframes chkRing{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(2.1)}}
+.row .row-title{background:linear-gradient(var(--text-3),var(--text-3)) 0 56%/0 1.5px no-repeat;transition:background-size .34s var(--ease) .14s,color .3s .14s}
 .row.completing .row-title{background-size:100% 1.5px;color:var(--text-3)}
-.row.collapse{overflow:hidden;opacity:0;height:0!important;min-height:0;padding-top:0;padding-bottom:0;border-bottom-width:0;transition:height .22s var(--ease),opacity .18s,padding .22s}
+.row.completing .row-meta,.row.completing .props{opacity:.45;transition:opacity .3s .14s}
+.row.collapse{overflow:hidden;opacity:0;transform:translateX(10px);height:0!important;min-height:0;padding-top:0;padding-bottom:0;border-bottom-width:0;
+  transition:height .3s var(--ease),opacity .2s,transform .3s var(--ease),padding .3s var(--ease)}
+.bump:not(.chk){animation:chkBump .42s var(--spring)}
 .btn:active:not(:disabled),.tbtn:active,.icon-btn:active,.qchip:active,.pop-item:active,.r-play:active,.rt-chip:active,.tpl:active,.day:active{transform:scale(.96)}
 .btn,.tbtn,.icon-btn,.qchip,.r-play,.rt-chip,.tpl,.day{transition:transform .12s var(--ease),background .12s,color .12s,box-shadow .12s}
 .toast{animation:toastIn .36s var(--spring)}
@@ -719,7 +731,6 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .h-today.ok{background:var(--green);border-color:var(--green);color:#fff}
 .h-today.no{background:var(--text);border-color:var(--text);color:var(--bg)}
 .h-today .ic{stroke-width:2.4}
-.pop{animation:chkPop .38s var(--spring)}
 .h-rest{flex:none;color:var(--text-3);font-size:12.5px;padding:0 6px}
 .h-evening{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:18px;padding:12px 14px;border-radius:12px;background:var(--bg-2);color:var(--text-2);font-size:14px;max-width:720px}
 .h-evening .switch span{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
@@ -900,7 +911,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .sub-add input:placeholder-shown + .sub-go{opacity:0;transform:scale(.6);pointer-events:none}
 .sub.enter{animation:rowIn .3s var(--ease)}
 .sub.leave{transition:opacity .18s,transform .18s var(--ease);opacity:0;transform:translateX(-8px)}
-.sub .chk.pop{animation:chkPop .38s var(--spring)}
+.sub .chk.bump{animation:chkBump .42s var(--spring)}
 
 /* ---------- телефон і планшет ---------- */
 @media (max-width:899px){
@@ -1061,3 +1072,4 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .g-redirect{font-size:12.5px;word-break:break-all}
 .acc-pass[hidden]{display:none}
 .acc-google p,.g-state{display:inline-flex;align-items:center;gap:6px;margin:0}
+.modal-wrap.confirm{z-index:260}

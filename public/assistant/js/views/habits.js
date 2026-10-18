@@ -89,7 +89,7 @@ function listPage() {
     if (t) {
       const h = data.list.find(x => x.id === +t.dataset.today);
       const next = h.today === null ? true : h.today === 1 ? false : null;   // порожньо → ✓ → ✗ → порожньо
-      t.classList.add('pop'); if (navigator.vibrate) navigator.vibrate(10);
+      t.classList.add('bump'); if (navigator.vibrate) navigator.vibrate(10);
       try { await post(`habits/${h.id}/mark`, { day: data.today, done: next }); await load(); changed(); } catch (err) { fail(err); }
     }
   }
@@ -193,7 +193,7 @@ function habitPage(id) {
     if (t.dataset.day) {
       const d = h.month.days.find(x => x.day === t.dataset.day);
       const next = d.mark == null ? true : d.mark === 1 ? false : null;
-      t.classList.add('pop'); if (navigator.vibrate) navigator.vibrate(10);
+      t.classList.add('bump'); if (navigator.vibrate) navigator.vibrate(10);
       try { h = await post(`habits/${id}/mark`, { day: d.day, done: next }); month = h.month.month; draw(); changed(); } catch (err) { fail(err); }
       return;
     }

@@ -197,7 +197,7 @@ async function onClick(e) {
   const row = e.target.closest('.sub');
   if (a === 'sub-done' && row) {
     const k = it.children.find(x => x.id === +row.dataset.id); if (!k) return;
-    k.done = !k.done; row.classList.toggle('done', k.done); b.classList.toggle('on', k.done); b.classList.add('pop'); subsCount();
+    k.done = !k.done; row.classList.toggle('done', k.done); b.classList.toggle('on', k.done); b.classList.remove('bump'); b.offsetWidth; if (k.done) b.classList.add('bump'); subsCount();
     try { await post(`assistant/items/${k.id}/${k.done ? 'complete' : 'reopen'}`); changed(); }
     catch (err) { fail(err); k.done = !k.done; row.classList.toggle('done', k.done); b.classList.toggle('on', k.done); subsCount(); }
   }

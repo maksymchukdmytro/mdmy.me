@@ -189,7 +189,7 @@ export function closeMenu() { if (openMenu) { openMenu.off(); openMenu.box.remov
 // ---------- діалог підтвердження ----------
 export function confirmBox(text, { ok = 'Видалити', danger = true } = {}) {
   return new Promise(resolve => {
-    const w = document.createElement('div'); w.className = 'modal-wrap';
+    const w = document.createElement('div'); w.className = 'modal-wrap confirm';   // поверх аркушів (нотатка, картка задачі)
     w.innerHTML = `<div class="modal" role="alertdialog" aria-modal="true"><p>${esc(text)}</p>
       <div class="modal-act"><button type="button" class="btn" data-v="0">Скасувати</button><button type="button" class="btn ${danger ? 'danger-solid' : 'primary'}" data-v="1">${esc(ok)}</button></div></div>`;
     document.body.append(w);
