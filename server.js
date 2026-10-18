@@ -31,7 +31,8 @@ function workspace(ws) {
   if (!ws) return { assistant, push };
   let w = WS.get(ws); if (w) return w;
   const wdb = DB.open(DB.wsDir(DATA, ws));
-  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws });
+  const acc0 = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
+  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws, allow: acc0 && acc0.role === 'demo' ? () => demoAllow(ws) : null });
   w = { db: wdb, assistant: as, push: as.push };
   WS.set(ws, w);
   const acc = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
@@ -41,20 +42,42 @@ function workspace(ws) {
 }
 const wsOf = a => workspace(a.ws);
 
-// Гостьовий вхід (роль demo): спільний пароль, тож обмежуємо дороге — асистент і розшифровку голосу — денним лімітом.
+// Гостьовий вхід (роль demo): спільний пароль, тож обмежуємо дороге — асистент і розшифровку голосу — денним лімітом
+// (повідомлення асистенту рахує сам асистент через allow — і з сайту, і з Telegram).
 const DEMO_LIMIT = 40, demoUse = new Map();
+function demoAllow(ws) {
+  const day = new Date().toISOString().slice(0, 10), u = demoUse.get(ws);
+  const n = u && u.day === day ? u.n + 1 : 1;
+  demoUse.set(ws, { day, n });
+  return n <= DEMO_LIMIT;
+}
 function demoBlocked(a, req, url) {
   if (a.role !== 'demo') return null;
   if (url.startsWith('/api/nakladna/')) return 'Накладні в гостьовому вході недоступні.';
   if (url === '/api/routines/media' && req.method === 'POST') return 'У гостьовому вході завантаження фото й відео вимкнено.';
-  if (req.method === 'POST' && /^\/api\/(assistant\/(message|triage|summary|plan)|stt\/transcribe)$/.test(url)) {
-    const day = new Date().toISOString().slice(0, 10), u = demoUse.get(a.ws);
-    const n = u && u.day === day ? u.n + 1 : 1;
-    demoUse.set(a.ws, { day, n });
-    if (n > DEMO_LIMIT) return 'Гостьовий ліміт асистента на сьогодні вичерпано. Спробуйте завтра.';
-  }
+  if (req.method === 'POST' && /^\/api\/(assistant\/(triage|summary|plan)|stt\/transcribe)$/.test(url) && !demoAllow(a.ws))
+    return 'Гостьовий ліміт асистента на сьогодні вичерпано. Спробуйте завтра.';
   return null;
 }
+
+// Telegram: один бот (основної бази) — багато чатів. Чат окремої бази знаходимо за її chatId або кодом привʼязки.
+const wsList = () => [...WS.values()];
+assistant.bot.setRouter({
+  find(chat, code) {
+    const target = code ? wsList().find(w => w.assistant.settings().linkCode === code) : null;
+    if (target) { this.release(chat, target); return target.assistant.bot; }
+    const w = wsList().find(x => x.assistant.settings().chatId === chat);
+    return w ? w.assistant.bot : null;
+  },
+  isCode: code => wsList().some(w => w.assistant.settings().linkCode === code),
+  // чат переходить до іншого облікового запису — відвʼязуємо його від окремих баз (крім keep)
+  release(chat, keep) { for (const w of wsList()) if (w !== keep && w.assistant.settings().chatId === chat) w.assistant.unlinkTelegram(); }
+});
+// Telegram Web App: вхід у той обліковий запис, до чиєї бази привʼязаний чат
+auth.setTelegramLookup(uid => {
+  const w = [...WS.entries()].find(([, x]) => +x.assistant.settings().chatId === +uid);
+  return w ? db.prepare('SELECT * FROM accounts WHERE ws = ? AND disabled = 0').get(w[0]) : null;
+});
 
 // ---------- сторінки ----------
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',

@@ -9,7 +9,7 @@
 |---|---|
 | Браузер | `POST /api/login {login, password}` → cookie `mdmy_session`. Кожен не-GET запит — із заголовком `X-MDMY: 1`. |
 | Застосунок (Android тощо) | `POST /api/auth/token {login, password, client: "android"}` → `{token, expiresInDays, account}`. Далі — заголовок `Authorization: Bearer <token>` (без `X-MDMY`). |
-| Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Пускає лише власника привʼязаного до асистента бота (підпис `initData` перевіряється токеном бота). |
+| Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Вхід у той обліковий запис, до якого привʼязаний цей Telegram (підпис `initData` перевіряється токеном бота). |
 
 Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin, demo}`; `demo` — гостьовий вхід з окремими демо-даними),
 `GET /api/sessions` — активні входи, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
@@ -63,7 +63,7 @@
 | `GET search?q` | Пошук по всьому, що сказано асистенту, і по записах |
 | `POST message {text}` | Повідомлення асистенту (як у Telegram): `{reply, done[], items[], msgId, undoable}` |
 | `POST undo {msgId}` | Скасувати дії повідомлення |
-| `GET settings`, `POST settings` | Налаштування асистента (ключ Claude і токен бота назад не віддаються). `style` — стиль спілкування (промпт власника, до 1500 символів). Ключ, модель і бота (`anthropicKey`, `clearKey`, `model`, `botToken`, `clearBot`, `unlink`) бачить і змінює лише адміністратор; іншим — 403, а в `GET` цих полів немає (`admin: false`) |
+| `GET settings`, `POST settings` | Налаштування асистента (ключ Claude і токен бота назад не віддаються). `style` — стиль спілкування (промпт власника, до 1500 символів). Ключ, модель і токен бота (`anthropicKey`, `clearKey`, `model`, `botToken`, `clearBot`) змінює лише адміністратор (іншим — 403; `hasKey`, `model`, `botError` в `GET` лише для нього). Привʼязка Telegram — для кожного: `hasBot`, `botName`, `linked`, `linkUrl` (t.me/<бот>?start=<код>), `unlink` |
 | `POST plan`, `POST summary` | Ранковий план / підсумок дня (і надіслати в Telegram) |
 
 Голос: `POST /api/stt/transcribe?lang=uk|ru|en|auto`, тіло — сирі байти аудіо (webm/ogg/m4a/wav, до 20 МБ) → `{text, duration, …}`; `GET /api/stt/health`.

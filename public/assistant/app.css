@@ -1028,3 +1028,4 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .style-presets .chip:hover{color:var(--text);background:var(--hover)}
 .style-in{width:100%;min-height:96px;resize:vertical;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:var(--bg);font:inherit;line-height:1.45}
 #set-style .row-act{margin-top:10px;align-items:center}
+.admin-only[hidden]{display:none!important}

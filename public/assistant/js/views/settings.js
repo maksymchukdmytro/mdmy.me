@@ -7,7 +7,7 @@ import { meta, refreshMeta } from '../store.js';
 import * as push from '../push.js';
 
 const TZ = [['Europe/Kyiv', 'Київ'], ['Europe/Chisinau', 'Кишинів'], ['Europe/Warsaw', 'Варшава'], ['Europe/Berlin', 'Берлін'], ['Europe/Prague', 'Прага'], ['Europe/London', 'Лондон'], ['America/New_York', 'Нью-Йорк']];
-const ADMIN = ['ai', 'tg'];          // ключ Claude, модель і бот — лише для адміністратора
+const ADMIN = ['ai'];                // ключ Claude і модель — лише для адміністратора; бота (токен) — теж, а привʼязати свій Telegram може кожен
 const STYLES = [
   ['Коротко', 'Відповідай дуже коротко, 1–2 речення, без вступів і без емодзі.'],
   ['Дружньо', 'Звертайся на «ти», тепло й підбадьорливо, можна 1–2 емодзі.'],
@@ -54,10 +54,10 @@ export function settingsPage(sub) {
         <div class="push-devices"></div>
       </section>
 
-      <section class="set" id="set-tg" hidden>
+      <section class="set" id="set-tg">
         <h2>Telegram</h2>
-        <p class="muted">Бот приймає голосові й текст, надсилає нагадування, ранковий план і підсумок дня, а кнопка «Задачі» в ньому відкриває цей застосунок. Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (<code>/newbot</code>) і вставте токен.</p>
-        <div class="kv"><span>Токен бота</span><div><input type="password" data-f="botToken" placeholder="123456789:AA…" autocomplete="off"></div></div>
+        <p class="muted">Бот приймає голосові й текст, надсилає нагадування, ранковий план і підсумок дня, а кнопка «Задачі» в ньому відкриває цей застосунок.<span class="admin-only" hidden> Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (<code>/newbot</code>) і вставте токен.</span></p>
+        <div class="kv admin-only" hidden><span>Токен бота</span><div><input type="password" data-f="botToken" placeholder="123456789:AA…" autocomplete="off"></div></div>
         <div class="bot-state"></div>
       </section>
 
@@ -113,15 +113,18 @@ export function settingsPage(sub) {
     f('morningTime').value = s.morningTime; f('morningOn').checked = s.morningOn;
     f('summaryTime').value = s.summaryTime; f('summaryOn').checked = s.summaryOn;
     f('voiceLang').value = s.voiceLang;
-    if (!s.admin) return;
-    f('anthropicKey').value = ''; f('botToken').value = '';
-    f('model').value = s.model;
-    $('.key-state', root).innerHTML = s.hasKey ? `Ключ задано (${esc(s.keyHint)}) · <button type="button" class="link" data-a="clear-key">видалити</button>` : '<span class="muted">Ключ не задано — асистент не зможе розбирати повідомлення.</span>';
+    $$('.admin-only', root).forEach(x => { x.hidden = !s.admin; });
     const bs = $('.bot-state', root);
-    if (!s.hasBot) bs.innerHTML = '<p class="muted small">Бот не підключено.</p>';
-    else if (!s.linked) bs.innerHTML = `<p>Бот <b>@${esc(s.botName)}</b> підключено. Привʼяжіть свій Telegram:</p><a class="btn primary sm" href="${esc(s.linkUrl)}" target="_blank" rel="noopener">${icon('telegram', 14)}Відкрити бота й натиснути Start</a>`;
-    else bs.innerHTML = `<p>${icon('checkCircle', 14)} Привʼязано до <b>@${esc(s.botName)}</b>.</p><div class="row-act"><button type="button" class="btn sm ghost" data-a="unlink">Відвʼязати чат</button><button type="button" class="btn sm ghost danger" data-a="clear-bot">Видалити бота</button></div>`;
-    if (s.botError) bs.insertAdjacentHTML('beforeend', `<p class="err small">${esc(s.botError)}</p>`);
+    if (!s.hasBot) bs.innerHTML = `<p class="muted small">${s.admin ? 'Бот не підключено.' : 'Бот ще не підключено — це робить адміністратор.'}</p>`;
+    else if (!s.linked) bs.innerHTML = `<p>Привʼяжіть свій Telegram до бота <b>@${esc(s.botName)}</b>:</p><a class="btn primary sm" href="${esc(s.linkUrl)}" target="_blank" rel="noopener">${icon('telegram', 14)}Відкрити бота й натиснути Start</a>
+      ${s.demo ? '<p class="muted small">Гостьовий акаунт спільний: якщо його привʼяже хтось інший, повідомлення підуть уже йому.</p>' : ''}`;
+    else bs.innerHTML = `<p>${icon('checkCircle', 14)} Привʼязано до <b>@${esc(s.botName)}</b>.</p><div class="row-act"><button type="button" class="btn sm ghost" data-a="unlink">Відвʼязати чат</button>${s.admin ? '<button type="button" class="btn sm ghost danger" data-a="clear-bot">Видалити бота</button>' : ''}</div>`;
+    if (s.admin && s.botError) bs.insertAdjacentHTML('beforeend', `<p class="err small">${esc(s.botError)}</p>`);
+    if (s.admin) {
+      f('anthropicKey').value = ''; f('botToken').value = '';
+      f('model').value = s.model;
+      $('.key-state', root).innerHTML = s.hasKey ? `Ключ задано (${esc(s.keyHint)}) · <button type="button" class="link" data-a="clear-key">видалити</button>` : '<span class="muted">Ключ не задано — асистент не зможе розбирати повідомлення.</span>';
+    }
     clearInterval(linkPoll);
     if (s.hasBot && !s.linked) linkPoll = setInterval(async () => { try { const n = await get('assistant/settings'); if (n.linked) fill(n); } catch (e) {} }, 3000);
   }
