@@ -660,34 +660,55 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .row.flash{animation:flash 1.4s var(--ease)}
 @keyframes flash{0%{background:var(--active);transform:translateY(-6px);opacity:0}25%{opacity:1;transform:none}100%{background:transparent}}
 
+/* ---------- меню телефона (нижній аркуш) ---------- */
+.m-sheet{padding-left:12px;padding-right:12px}
+.m-search{display:flex;align-items:center;gap:10px;width:100%;height:48px;margin:2px 0 10px;padding:0 14px;border:0;border-radius:14px;background:var(--bg-3);color:var(--text-3);font-size:16px;text-align:left}
+.m-label{margin:14px 6px 4px;color:var(--text-3);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.m-item{display:flex;align-items:center;gap:14px;min-height:50px;padding:0 10px;border-radius:12px;color:var(--text);text-decoration:none;font-size:16px;border:0;background:transparent;width:100%;text-align:left}
+.m-item .ic{color:var(--text-2)}
+.m-item span{flex:1}
+.m-item b{font-weight:500;color:var(--text-3);font-size:14px}
+.m-item.on{background:var(--hover);font-weight:600}
+.m-item:active{background:var(--active)}
+.m-item.add{color:var(--text-2)}
+
 /* ---------- кнопка «+» і нова задача на весь екран ---------- */
 .fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:36;width:58px;height:58px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(15,15,15,.22),0 2px 6px rgba(15,15,15,.12);transition:transform .18s var(--spring),opacity .2s;animation:fabIn .45s var(--spring) both .1s}
 .fab:active{transform:scale(.9)}
 @keyframes fabIn{from{transform:scale(0) rotate(-90deg)}}
 .has-panel .fab,.bulk-on .fab,.selecting .fab{transform:scale(0);opacity:0;pointer-events:none}
-.cmp-wrap{position:fixed;inset:0;z-index:150;pointer-events:none}
-.cmp{position:absolute;left:0;right:0;top:0;height:var(--vh,100dvh);display:flex;flex-direction:column;background:var(--bg);padding:calc(14px + env(safe-area-inset-top)) 22px calc(16px + env(safe-area-inset-bottom));
-     clip-path:circle(0 at var(--ox) var(--oy));transition:clip-path .5s var(--ease);pointer-events:auto}
-.cmp-wrap.in .cmp{clip-path:circle(150% at var(--ox) var(--oy))}
-.cmp-wrap.out .cmp{transition-duration:.35s}
-.cmp-x{align-self:flex-end;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--line-2);background:var(--bg);color:var(--text)}
-.cmp-mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;padding-bottom:12vh;min-height:0}
-.cmp-in{width:100%;border:0;padding:0;font-size:26px;line-height:1.3;font-weight:600;letter-spacing:-.015em;resize:none;background:transparent;box-shadow:none!important;min-height:0;opacity:0;transform:translateY(10px);transition:opacity .3s .15s,transform .3s var(--ease) .15s}
+.cmp-wrap{position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0);transition:background .25s}
+.cmp-wrap.in{background:var(--scrim)}
+.cmp{position:absolute;left:0;right:0;top:0;height:var(--vh,100dvh);display:flex;flex-direction:column;background:var(--bg);
+     padding:calc(8px + env(safe-area-inset-top)) 18px 12px;opacity:0;transform:translateY(28px);transition:opacity .22s,transform .32s var(--spring)}
+.cmp-wrap.in .cmp{opacity:1;transform:none}
+.cmp-wrap.out .cmp{opacity:0;transform:translateY(20px);transition-duration:.18s}
+.cmp-top{flex:none;display:flex;align-items:center;justify-content:space-between;height:48px}
+.cmp-top b{font-size:15px;font-weight:600;color:var(--text-2)}
+.cmp-x{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--line-2);background:var(--bg);color:var(--text)}
+.cmp-mid{flex:1;min-height:0;overflow-y:auto;padding:10px 0 8px;display:flex;flex-direction:column;gap:10px}
+.cmp-in{width:100%;border:0;padding:0;font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-.015em;resize:none;background:transparent;box-shadow:none!important;min-height:0;flex:none}
 .cmp-in::placeholder{color:var(--text-3)}
-.cmp-wrap.in .cmp-in,.cmp-wrap.in .cmp-chips,.cmp-wrap.in .cmp-bottom{opacity:1;transform:none}
-.cmp-chips{display:flex;flex-wrap:wrap;gap:8px;opacity:0;transform:translateY(10px);transition:opacity .3s .22s,transform .3s var(--ease) .22s}
-.cmp-chip{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 16px;border-radius:999px;border:1px solid var(--line-2);background:var(--bg);color:var(--text-2);font-size:15px}
-.cmp-chip.icon{width:42px;padding:0;justify-content:center}
+.cmp-rec{margin:0;display:flex;align-items:center;gap:8px;color:var(--text-2);font-size:14.5px}
+.cmp-rec .dot{margin:0}
+.cmp-chips{flex:none;display:flex;gap:8px;overflow-x:auto;padding:8px 0;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none}
+.cmp-chips::-webkit-scrollbar{display:none}
+.cmp-chip{flex:none;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--bg);color:var(--text-2);font-size:15px;white-space:nowrap}
+.cmp-chip.icon{width:40px;padding:0;justify-content:center}
 .cmp-chip.on{color:var(--text);border-color:var(--text)}
 .cmp-chip.on.p1{color:var(--amber);border-color:var(--amber)}.cmp-chip.on.p2{color:var(--red);border-color:var(--red)}
-.cmp-hint{color:var(--text-2);font-size:14.5px;line-height:1.5}
+.cmp-hint{color:var(--text-2);font-size:14px;line-height:1.45;white-space:normal}
 .cmp-subs{display:flex;flex-direction:column;gap:2px}
 .cmp-sub{display:flex;align-items:center;gap:10px;color:var(--text-3);min-height:40px;animation:rowIn .25s var(--ease)}
 .cmp-sub input{flex:1;border:0;padding:0;background:transparent;box-shadow:none!important;font-size:17px;min-height:36px}
-.cmp-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;opacity:0;transform:translateY(10px);transition:opacity .3s .28s,transform .3s var(--ease) .28s}
-.cmp-ai{display:inline-flex;align-items:center;gap:7px;height:44px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:var(--text-2);font-size:14.5px}
+.cmp-bottom{flex:none;display:flex;align-items:center;gap:8px;padding-top:6px;padding-bottom:env(safe-area-inset-bottom)}
+.cmp-mic{--lv:0;flex:none;display:grid;place-items:center;width:54px;height:54px;border-radius:50%;border:0;background:var(--bg-3);color:var(--text);transition:background .15s,color .15s,transform .15s var(--spring);box-shadow:0 0 0 calc(var(--lv) * 14px) var(--red-bg)}
+.cmp-mic.on{background:var(--red);color:#fff}
+.cmp-mic.busy{opacity:.5}
+.cmp-mic:active{transform:scale(.92)}
+.cmp-ai{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--text-2);font-size:14.5px}
 .cmp-ai[aria-pressed="true"]{background:var(--bg-3);color:var(--text)}
-.cmp-go{display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 26px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);font-size:16px;font-weight:600;box-shadow:0 10px 24px rgba(15,15,15,.18);transition:transform .15s var(--spring)}
+.cmp-go{margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 24px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);font-size:16px;font-weight:600;transition:transform .15s var(--spring)}
 .cmp-go:active{transform:scale(.95)}.cmp-go:disabled{opacity:.6}
 
 /* ---------- свайпи по задачах (телефон) ---------- */
@@ -724,6 +745,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 /* ---------- телефон і планшет ---------- */
 @media (max-width:899px){
   .desk-only{display:none!important}
+  .side,.side-scrim{display:none!important}
   .side{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .main,.side-hidden .main{margin-left:0}
   .show-side{display:inline-grid}
@@ -766,7 +788,6 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
   .side-item{height:36px}
   /* ---- з відео: «Сьогодні», «+», свайпи, меню з відсуванням ---- */
   .phone-block{display:block!important}
-  .side-me.phone-block{display:flex!important}
   input,textarea,select{font-size:16px}
   .today-page .vbar,.today-page .fchips{display:none}
   .today-page .page-title{font-size:28px}
@@ -780,32 +801,6 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
   .row.sw-ready::before,.row.sw-ready::after{opacity:1}
   .sub{min-height:44px}.sub-add{min-height:46px}
   .sub-go{width:36px;height:36px}
-  /* меню: темна панель, екран відсувається вбік і зменшується */
-  .side{width:100%;inset:0;z-index:0;transform:none!important;visibility:hidden;background:var(--accent);color:var(--accent-ink);border-right:0;box-shadow:none!important;
-        padding:calc(20px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom)) 22px;opacity:0;transition:opacity .3s,visibility 0s .45s}
-  .app.side-open .side{visibility:visible;opacity:1;transition:opacity .3s}
-  .side>*{max-width:62vw}
-  .side-top{display:none}
-  .side-me{flex-direction:column;align-items:flex-start;gap:12px;margin:6px 0 22px;position:relative;max-width:none!important}
-  .me-ava{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--accent-ink);color:var(--accent);font-size:28px;font-weight:700;box-shadow:0 0 0 3px var(--accent),0 0 0 5px color-mix(in srgb,var(--accent-ink) 40%,transparent)}
-  .side-me b{font-size:26px;line-height:1.15;letter-spacing:-.02em;max-width:60vw}
-  .me-back{display:none;position:absolute;right:calc(-38vw + 10px);top:14px;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent-ink) 30%,transparent);background:transparent;color:var(--accent-ink)}
-  .side .side-item{color:color-mix(in srgb,var(--accent-ink) 72%,transparent);height:42px;font-size:15.5px;padding:0 4px}
-  .side .side-item:hover,.side .side-item.on{background:transparent;color:var(--accent-ink)}
-  .side .side-item.on span{font-weight:700}
-  .side .side-label{color:color-mix(in srgb,var(--accent-ink) 45%,transparent);padding:0 4px}
-  .side .side-label .icon-btn{color:inherit}
-  .side .n{color:color-mix(in srgb,var(--accent-ink) 50%,transparent)!important}
-  .side .n.badge:not(:empty){background:var(--accent-ink);color:var(--accent)!important}
-  .side-stats{margin-top:auto;padding-top:18px}
-  .side .side-stats small{color:color-mix(in srgb,var(--accent-ink) 55%,transparent)}
-  .side .side-stats b{font-size:16px}
-  .side-foot{margin-top:6px;padding-top:4px}
-  .main{position:relative;z-index:1;background:var(--bg);min-height:100vh;transform-origin:0 50%;transition:transform .5s var(--spring),border-radius .5s var(--spring),box-shadow .5s}
-  .app.side-open .main{transform:translateX(66vw) scale(.84);border-radius:30px;overflow:hidden;height:100vh;box-shadow:-20px 0 60px rgba(0,0,0,.35)}
-  .app.side-open .side-scrim{display:block;position:fixed;inset:0 0 0 60vw;background:transparent;z-index:5}
-  .tabbar{transition:transform .4s var(--spring)}
-  .app.side-open .tabbar{transform:translateY(120%)}
   .phone-only{display:inline-flex!important}
   .sheet-grab.phone-only{display:block!important}
   /* шапка: на телефоні ховається; з прокруткою виїжджає з назвою сторінки */

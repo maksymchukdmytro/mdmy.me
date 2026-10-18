@@ -2,7 +2,7 @@
 // Оболонка (бічна панель, верхня смуга, нижня панель на телефоні), маршрути #/…, вхід, тема, командна палітра (Ctrl+K).
 import { api, post, onUnauthorized, telegramInitData, telegramLogin, clearToken } from './api.js';
 import { icon } from './icons.js';
-import { $, $$, esc, pref, toast, isTyping, debounce, fmtDue } from './ui.js';
+import { $, $$, esc, pref, toast, isTyping, debounce, fmtDue, sheet } from './ui.js';
 import { meta, refreshMeta, onMeta, openSpaces, space } from './store.js';
 import { tasksPage } from './views/tasks.js';
 import { openTask, closeTask, panelOpenId } from './views/panel.js';
@@ -54,8 +54,6 @@ onUnauthorized(() => { if (account) { account = null; clearToken(); showLogin('�
 function shell() {
   app.innerHTML = `<div class="app${pref.get('sideHidden', false) ? ' side-hidden' : ''}" id="shell">
     <aside class="side" id="side" aria-label="Навігація">
-      <div class="side-me phone-block"><span class="me-ava">${esc((account.name || 'm').trim()[0].toUpperCase())}</span><b>${esc(account.name || 'mdmy')}</b>
-        <button type="button" class="me-back" data-act="side-close" aria-label="Закрити меню">${icon('chevronLeft', 18)}</button></div>
       <div class="side-top">
         <a class="ws" href="#/today"><span class="ws-logo">m</span><span class="ws-name">${esc(account.name || 'mdmy')}</span></a>
         <button class="icon-btn" data-act="side-toggle" title="Сховати панель">${icon('sidebar')}</button>
@@ -144,10 +142,33 @@ async function onShellClick(e) {
     if (innerWidth < 900) sh.classList.toggle('side-open');
     else { sh.classList.toggle('side-hidden'); pref.set('sideHidden', sh.classList.contains('side-hidden')); }
   }
-  if (a === 'side-open') { sh.classList.add('side-open'); const t = $('#toast'); if (t) t.hidden = true; }
+  if (a === 'side-open') phoneMenu();
   if (a === 'side-close') sh.classList.remove('side-open');
   if (a === 'search') palette();
   if (a === 'new-space') location.hash = '#/settings/spaces';
+}
+
+// ---------- меню телефона: легкий нижній аркуш ----------
+// Сьогодні, Вхідні й Ритуали — на нижній панелі, тут лише решта: пошук, простори, інші розділи.
+function phoneMenu() {
+  const c = meta.counts || {}, cur = currentKey;
+  const item = (href, ic, label, n, key) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
+  const s = sheet(`<div class="m-sheet">
+      <button type="button" class="m-search" data-m="search">${icon('search', 18)}Пошук задач і нотаток</button>
+      <p class="m-label">Простори</p>
+      ${openSpaces().filter(x => x.key !== 'inbox').map(x => item('#/s/' + x.key, x.icon, x.name, (c.spaces || {})[x.key], 's/' + x.key)).join('')}
+      <a class="m-item add" href="#/settings/spaces">${icon('plus', 20)}<span>Новий простір</span></a>
+      <p class="m-label">Ще</p>
+      ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
+      ${item('#/all', 'layers', 'Усі задачі', c.all, 'all')}
+      ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
+      ${item('#/record', 'mic', 'Запис голосом', 0, 'record')}
+      ${item('#/settings', 'settings', 'Налаштування', 0, 'settings')}
+    </div>`, { label: 'Меню' });
+  s.el.addEventListener('click', e => {
+    if (e.target.closest('[data-m="search"]')) { s.close(); return setTimeout(palette, 200); }
+    if (e.target.closest('a[href]')) s.close();
+  });
 }
 
 // ---------- маршрути (nav.js) ----------
