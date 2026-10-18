@@ -46,7 +46,7 @@
 
 | Метод і шлях | Що робить |
 |---|---|
-| `GET meta` | Довідники й лічильники для навігації: `spaces`, `statuses`, `tags [{name, open}]`, `icons`, `counts {spaces, today, inbox, all, views}` |
+| `GET meta` | Довідники й лічильники для навігації: `spaces`, `statuses`, `tags [{name, open}]`, `icons`, `counts {spaces, today, inbox, all, views, done7 {простір: n}, doneToday}`, `activity [{day, n}]` — зроблено по днях за 14 днів (задачі + ритуали) |
 | `GET tasks?area&view&status&q&tag&prio&sort&offset&limit` | Список верхньорівневих задач з підзадачами (`children`), `total`, `counts`. `area`: ключ простору або `all`; `view`: `open` · `today` · `overdue` · `week` · `nodate` · `done` · `any`; `sort`: `smart` · `prio` · `created` · `alpha` · `manual`; `limit` до 200 |
 | `GET board?area&view&q&tag&prio` | Канбан: `columns[] = {status, name, done, total, items[]}`; «готово» — за останні 14 днів |
 | `POST items` | Створити: `{text, area?, status?, due?, priority?, tags?, description?, parent_id?, kind?, after?, before?}`. `due` — місцевий час `YYYY-MM-DDTHH:MM` |

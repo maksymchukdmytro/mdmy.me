@@ -54,6 +54,8 @@ onUnauthorized(() => { if (account) { account = null; clearToken(); showLogin('�
 function shell() {
   app.innerHTML = `<div class="app${pref.get('sideHidden', false) ? ' side-hidden' : ''}" id="shell">
     <aside class="side" id="side" aria-label="Навігація">
+      <div class="side-me phone-block"><span class="me-ava">${esc((account.name || 'm').trim()[0].toUpperCase())}</span><b>${esc(account.name || 'mdmy')}</b>
+        <button type="button" class="me-back" data-act="side-close" aria-label="Закрити меню">${icon('chevronLeft', 18)}</button></div>
       <div class="side-top">
         <a class="ws" href="#/today"><span class="ws-logo">m</span><span class="ws-name">${esc(account.name || 'mdmy')}</span></a>
         <button class="icon-btn" data-act="side-toggle" title="Сховати панель">${icon('sidebar')}</button>
@@ -71,6 +73,7 @@ function shell() {
       <div class="side-label"><span>Інше</span></div>
       <a class="side-item" href="#/notes" data-r="notes">${icon('note')}<span>Нотатки</span></a>
       <a class="side-item" href="#/settings" data-r="settings">${icon('settings')}<span>Налаштування</span></a>
+      <div class="side-stats" data-act="stats"></div>
       <div class="side-foot">
         <a class="side-item" href="/" title="Головна mdmy.me">${icon('home')}<span>mdmy.me</span></a>
       </div>
@@ -92,7 +95,7 @@ function shell() {
       <button type="button" data-act="side-open">${icon('menu', 20)}<span>Меню</span></button>
     </nav>
   </div>`;
-  renderSideSpaces();
+  renderSideSpaces(); renderStats();
   app.addEventListener('click', onShellClick);
   holdToTalk($('.tab-mic', app));
 }
@@ -101,6 +104,20 @@ function renderSideSpaces() {
   box.innerHTML = openSpaces().filter(s => s.key !== 'inbox').map(s =>
     `<a class="side-item" href="#/s/${s.key}" data-r="s/${s.key}">${icon(s.icon)}<span>${esc(s.name)}</span><b class="n" data-n="s:${s.key}"></b></a>`).join('');
   renderCounts(); markActive();
+}
+// «Стабільність»: зроблено за 14 днів (задачі й ритуали) — плавна лінія
+function renderStats() {
+  const box = $('.side-stats'); if (!box) return;
+  const a = meta.activity || []; if (!a.length) { box.innerHTML = ''; return; }
+  const max = Math.max(1, ...a.map(x => x.n)), W = 180, H = 46;
+  const pts = a.map((x, i) => [i * W / (a.length - 1), H - 4 - (x.n / max) * (H - 10)]);
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2; d += ` C${mx},${y0} ${mx},${y1} ${x1},${y1}`; }
+  const total = a.reduce((s, x) => s + x.n, 0), half = a.length / 2;
+  const recent = a.slice(half).reduce((s, x) => s + x.n, 0), before = a.slice(0, half).reduce((s, x) => s + x.n, 0);
+  const word = !total ? 'Почнімо' : recent > before * 1.15 ? 'Краще, ніж тиждень тому' : recent < before * 0.85 ? 'Трохи менше, ніж тиждень тому' : 'Рівно й стабільно';
+  box.innerHTML = `<svg viewBox="-2 0 ${W + 4} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true"><path class="spark" d="${d}"/></svg>
+    <small>${word}</small><b>Стабільність · ${total} за 2 тижні</b>`;
 }
 function renderCounts() {
   const c = meta.counts || {};
@@ -114,7 +131,7 @@ function markActive() {
   const r = currentKey;
   for (const a of $$('[data-r]')) a.classList.toggle('on', a.dataset.r === r);
 }
-onMeta(() => { renderSideSpaces(); });
+onMeta(() => { renderSideSpaces(); renderStats(); });
 
 async function onShellClick(e) {
   const b = e.target.closest('[data-act]'); if (!b) {
@@ -127,7 +144,7 @@ async function onShellClick(e) {
     if (innerWidth < 900) sh.classList.toggle('side-open');
     else { sh.classList.toggle('side-hidden'); pref.set('sideHidden', sh.classList.contains('side-hidden')); }
   }
-  if (a === 'side-open') sh.classList.add('side-open');
+  if (a === 'side-open') { sh.classList.add('side-open'); const t = $('#toast'); if (t) t.hidden = true; }
   if (a === 'side-close') sh.classList.remove('side-open');
   if (a === 'search') palette();
   if (a === 'new-space') location.hash = '#/settings/spaces';
@@ -135,7 +152,7 @@ async function onShellClick(e) {
 
 // ---------- маршрути (nav.js) ----------
 function pageFor(key, parts) {
-  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space' });
+  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space', name: account.name });
   if (key === 'upcoming') return tasksPage({ key, title: 'Найближчі 7 днів', icon: 'upcoming', area: 'all', view: 'week', group: 'date' });
   if (key === 'all') return tasksPage({ key, title: 'Усі задачі', icon: 'layers', area: 'all', view: 'open', group: 'space' });
   if (key.startsWith('s/')) {
@@ -146,7 +163,7 @@ function pageFor(key, parts) {
   if (key === 'rituals') return ritualsPage(parts[1]);
   if (key === 'record') return recordPage();
   if (key === 'settings') return settingsPage(parts[1]);
-  return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space' });
+  return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space', name: account.name });
 }
 const CRUMB = { today: ['sun', 'Сьогодні'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Усі задачі'], notes: ['note', 'Нотатки'],
                 rituals: ['ritual', 'Ритуали'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };

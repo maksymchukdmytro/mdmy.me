@@ -4,9 +4,10 @@ import { api, get, post } from '../api.js';
 import { icon, STATUS_ICON } from '../icons.js';
 import { $, $$, esc, pref, toast, fail, menu, confirmBox, debounce, fmtDue, dueBucket, BUCKETS, isTyping, spin, wait } from '../ui.js';
 import { todayRituals } from './rituals.js';
-import { meta, space, status, openSpaces, firstStatus } from '../store.js';
+import { meta, space, status, openSpaces, firstStatus, onMeta } from '../store.js';
 import { go, taskHref } from '../nav.js';
 import { datePicker } from './panel.js';
+import { compose } from './composer.js';
 
 const PAGE = 100;
 const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
@@ -22,17 +23,25 @@ export function tasksPage(cfg) {
     items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0, collapsed: new Set(pref.get(K('collapsed'), []))
   };
   const fixedView = cfg.view !== 'open';
+  const isToday = cfg.key === 'today';
+  const WDN = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'Пʼятниця', 'Субота'];
+  const MONG = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+  function greeting() {
+    const d = new Date(), h = d.getHours(), name = (cfg.name || '').split(' ')[0];
+    const g = h < 5 ? 'Доброї ночі' : h < 12 ? 'Доброго ранку' : h < 18 ? 'Добрий день' : 'Добрий вечір';
+    return { date: `${WDN[d.getDay()]}, ${d.getDate()} ${MONG[d.getMonth()]}`, text: name ? `${g}, ${name}` : g };
+  }
   const cross = cfg.area === 'all';
   let root, top;
 
   // ---------- каркас ----------
   function render(el, topAct) {
     root = el; top = topAct;
-    root.innerHTML = `<div class="page tasks-page" data-layout="${st.mode}">
+    root.innerHTML = `<div class="page tasks-page${isToday ? ' today-page' : ''}" data-layout="${st.mode}">
       <div class="page-head">
-        <h1 class="page-title">${esc(cfg.title)}</h1>
+        ${isToday ? `<p class="overline">${esc(greeting().date)}</p><h1 class="page-title">${esc(greeting().text)}</h1>` : `<h1 class="page-title">${esc(cfg.title)}</h1>`}
       </div>
-      ${cfg.key === 'today' ? '<div class="rt-strip" hidden></div>' : ''}
+      ${isToday ? '<div class="sp-cards"></div><div class="rt-strip" hidden></div><p class="sec-label phone-block">Задачі на сьогодні</p>' : ''}
       <div class="inbox-bar" hidden></div>
       <div class="vbar">
         <div class="vtabs" role="tablist">
@@ -51,16 +60,19 @@ export function tasksPage(cfg) {
       <div class="tcontent"></div>
       <button type="button" class="btn more" hidden></button>
       <div class="bulk" hidden></div>
+      <button type="button" class="fab phone-only" data-t="compose" aria-label="Нова задача">${icon('plus', 26)}</button>
     </div>`;
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onKeyIn);
-    longPress();
+    longPress(); swipe();
+    offMeta = onMeta(drawCards);
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
     document.addEventListener('keydown', onKey);
     syncBar(); load();
   }
-  function destroy() { document.removeEventListener('keydown', onKey); document.body.classList.remove('bulk-on'); }
+  let offMeta = null;
+  function destroy() { document.removeEventListener('keydown', onKey); document.body.classList.remove('bulk-on'); if (offMeta) offMeta(); }
 
   function syncBar() {
     const page = $('.tasks-page', root); page.dataset.layout = st.mode;
@@ -83,7 +95,7 @@ export function tasksPage(cfg) {
     return p;
   }
   async function load(more) {
-    const strip = $('.rt-strip', root); if (strip && !more) todayRituals(strip);
+    const strip = $('.rt-strip', root); if (strip && !more) { todayRituals(strip); drawCards(); }
     const my = ++st.loading, box = $('.tcontent', root);
     if (!more) box.classList.add('busy');
     try {
@@ -93,9 +105,13 @@ export function tasksPage(cfg) {
         if (my !== st.loading) return;
         st.columns = d.columns; st.counts = d.counts;
       } else {
-        const d = await get('assistant/tasks?' + params({ offset: more ? st.items.length : 0, limit: PAGE }));
+        const [d, done] = await Promise.all([get('assistant/tasks?' + params({ offset: more ? st.items.length : 0, limit: PAGE })),
+          // «Сьогодні»: виконане за день лишається внизу закресленим — видно, що вже зроблено
+          isToday && !more && !st.q && !st.showDone ? get('assistant/tasks?area=all&view=done&limit=40') : null]);
         if (my !== st.loading) return;
         st.items = more ? st.items.concat(d.list) : d.list; st.total = d.total; st.counts = d.counts;
+        if (done) { const t0 = new Date(); t0.setHours(0, 0, 0, 0); st.doneToday = done.list.filter(x => x.done_at >= t0.getTime()); }
+        else if (!more) st.doneToday = [];
       }
     } catch (e) { if (my === st.loading) box.innerHTML = `<p class="err">${esc(e.message)}</p>`; box.classList.remove('busy'); return; }
     box.classList.remove('busy');
@@ -107,6 +123,18 @@ export function tasksPage(cfg) {
     drawBulk();
   }
   const refresh = () => load();
+
+  // ---------- картки просторів на «Сьогодні» ----------
+  function drawCards() {
+    const box = $('.sp-cards', root); if (!box) return;
+    const c = meta.counts || {}, open = c.spaces || {}, d7 = c.done7 || {};
+    const list = openSpaces().filter(s => s.key !== 'inbox' || open.inbox);
+    box.innerHTML = list.map((s, i) => {
+      const o = open[s.key] || 0, d = d7[s.key] || 0, p = o + d ? d / (o + d) : 0;
+      return `<a class="sp-card" href="#/s/${s.key}" style="--p:${p.toFixed(3)};--i:${i}">
+        <small>${o} ${o === 1 ? 'задача' : o > 1 && o < 5 ? 'задачі' : 'задач'}</small><b>${icon(s.icon, 16)}${esc(s.name)}</b><i class="sp-bar"><i></i></i></a>`;
+    }).join('');
+  }
 
   // ---------- «Вхідні» ----------
   function drawInbox() {
@@ -155,6 +183,12 @@ export function tasksPage(cfg) {
         return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it, false, rowN()) + it.children.map(c => rowHtml(c, true, rowN())).join('')).join('')}</div></section>`;
       }).join('');
     }
+    if (isToday && (st.doneToday || []).length && st.mode === 'list') {
+      const hid = st.collapsed.has('donetoday');
+      box.insertAdjacentHTML('beforeend', `<section class="grp grp-done${hid ? ' hid' : ''}"><button type="button" class="grp-h" data-grp="donetoday">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}<span>Зроблено сьогодні</span><b>${st.doneToday.length}</b></button>
+        <div class="rows">${st.doneToday.map(it => rowHtml({ ...it, children: [] }, false, 14)).join('')}</div></section>`);
+    }
+    if (st.flash) { const r = $(`.row[data-id="${st.flash}"]`, box); if (r) { r.classList.add('flash'); r.scrollIntoView({ block: 'nearest' }); } st.flash = null; }
     const more = $('.more', root), rest = st.total - st.items.length;
     more.hidden = rest <= 0 || st.mode !== 'list';
     more.textContent = `Показати ще ${Math.min(rest, PAGE)} з ${rest}`;
@@ -176,7 +210,7 @@ export function tasksPage(cfg) {
   }
   function rowHtml(it, child, i = 0) {
     const kids = it.children || [], kd = kids.filter(k => k.done).length;
-    return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" style="--i:${i}">
+    return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}"${child ? ` data-parent="${it.parent_id}"` : ''} style="--i:${i}">
       <label class="row-sel"><input type="checkbox" data-a="sel" ${st.sel.has(it.id) ? 'checked' : ''} aria-label="Вибрати"></label>
       <button type="button" class="chk${it.done ? ' on' : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
       <a class="row-main" href="${taskHref(it.id)}" data-a="open">
@@ -318,6 +352,54 @@ export function tasksPage(cfg) {
     input.disabled = false; input.focus();
   }
 
+  // ---------- свайпи (телефон): вправо — виконано, вліво — видалити з «Повернути» на місці ----------
+  let swiped = false;
+  function swipe() {
+    root.addEventListener('pointerdown', e => {
+      const row = e.target.closest('.row');
+      if (!row || e.pointerType === 'mouse' || st.selecting || row.classList.contains('done') || e.target.closest('.chk, .qchip, .row-sel')) return;
+      const sx = e.clientX, sy = e.clientY; let dx = 0, on = false;
+      const off = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); };
+      const mv = ev => {
+        const x = ev.clientX - sx, y = ev.clientY - sy;
+        if (!on) {
+          if (Math.abs(y) > 10 && Math.abs(y) > Math.abs(x)) return off();
+          if (Math.abs(x) < 14) return;
+          on = true; row.classList.add('swiping');
+        }
+        dx = Math.max(-160, Math.min(160, x));
+        row.style.setProperty('--dx', dx + 'px');
+        const ready = Math.abs(dx) > 90;
+        if (ready !== row.classList.contains('sw-ready') && navigator.vibrate) navigator.vibrate(8);
+        row.classList.toggle('sw-ready', ready);
+      };
+      const up = () => {
+        off(); if (!on) return;
+        swiped = true; setTimeout(() => { swiped = false; }, 400);
+        row.classList.remove('swiping', 'sw-ready');
+        row.style.setProperty('--dx', '0px');
+        if (dx > 90) { const c = row.querySelector('.chk'); if (c) c.click(); }
+        else if (dx < -90) softDelete(row);
+      };
+      addEventListener('pointermove', mv, { passive: true }); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+    });
+  }
+  async function softDelete(row) {
+    const id = +row.dataset.id, kids = $$(`.row[data-parent="${id}"]`, root);
+    const u = document.createElement('div'); u.className = 'row-undo';
+    u.innerHTML = `${icon('trash', 15)}<span>Задачу видалено</span><button type="button">Повернути</button>`;
+    row.replaceWith(u); kids.forEach(k => k.remove());
+    let undone = false;
+    u.querySelector('button').addEventListener('click', () => {
+      undone = true; u.replaceWith(row); let prev = row; kids.forEach(k => { prev.after(k); prev = k; });
+    });
+    await wait(4500);
+    if (undone || !u.isConnected) return;
+    try { await api('assistant/items/' + id, { method: 'DELETE' }); } catch (e) { fail(e); }
+    u.style.height = u.offsetHeight + 'px'; u.classList.add('collapse'); await wait(240);
+    changed();
+  }
+
   // ---------- вибір і масові дії ----------
   // Телефон: утримати задачу — вибрати (далі — дотиками); без окремої кнопки «Вибрати»
   let pressed = false;
@@ -341,7 +423,7 @@ export function tasksPage(cfg) {
   }
   function allIds() { return st.mode === 'board' ? st.columns.flatMap(c => c.items.map(i => i.id)) : st.items.flatMap(i => [i.id, ...i.children.map(c => c.id)]); }
   function findItem(id) {
-    const all = st.mode === 'board' ? st.columns.flatMap(c => c.items) : st.items.flatMap(i => [i, ...i.children]);
+    const all = st.mode === 'board' ? st.columns.flatMap(c => c.items) : [...st.items.flatMap(i => [i, ...i.children]), ...(st.doneToday || [])];
     return all.find(x => x.id === id);
   }
   function drawBulk() {
@@ -483,6 +565,12 @@ export function tasksPage(cfg) {
     if (t) {
       const k = t.dataset.t;
       if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
+      if (k === 'compose') {
+        const due = isToday ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d.getTime(); })() : null;
+        const id = await compose({ area: cfg.area, due, from: t });
+        if (id) st.flash = id;
+        return;
+      }
       if (k === 'layout') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); st.sel.clear(); load(); }
       if (k === 'triage') triage();
       if (k === 'suggest') suggest(t);
@@ -516,7 +604,7 @@ export function tasksPage(cfg) {
     if (!a) return;
     const row = a.closest('[data-id]'), id = row && +row.dataset.id, act = a.dataset.a;
     if (act === 'open') {
-      if (pressed) { e.preventDefault(); pressed = false; return; }
+      if (pressed || swiped) { e.preventDefault(); pressed = false; return; }
       if (st.selecting) { e.preventDefault(); toggleSel(id); }
       return;   // інакше — звичайне посилання на задачу
     }
@@ -530,7 +618,7 @@ export function tasksPage(cfg) {
         const [r] = await Promise.all([post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`), wait(it.done ? 0 : 420)]);
         if (r.next) toast('Наступний раз: ' + fmtDue(r.next));
         else if (!it.done) toast('Виконано', async () => { await post(`assistant/items/${id}/reopen`); changed(); });
-        if (!it.done && !r.next) { row.style.height = row.offsetHeight + 'px'; row.classList.add('collapse'); await wait(220); }
+        if (!it.done && !r.next && !isToday) { row.style.height = row.offsetHeight + 'px'; row.classList.add('collapse'); await wait(220); }
         changed();
       } catch (err) { fail(err); a.classList.toggle('on'); row.classList.remove('completing'); }
       return;

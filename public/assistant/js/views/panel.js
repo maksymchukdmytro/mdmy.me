@@ -65,8 +65,40 @@ function flush() {
 // ---------- відмальовка ----------
 function propBtn(p, ic, label, value, empty) {
   return `<div class="prop-row"><span class="pk">${icon(ic)}<span>${label}</span></span>
-    <button type="button" class="pv${value ? '' : ' empty'}" data-p="${p}">${value || esc(empty || 'Порожньо')}</button></div>`;
+    <button type="button" class="pv${value ? '' : ' none'}" data-p="${p}">${value || esc(empty || 'Порожньо')}</button></div>`;
 }
+const subHtml = k => `<div class="sub${k.done ? ' done' : ''}" data-id="${k.id}">
+    <button type="button" class="chk sm${k.done ? ' on' : ''}" data-a="sub-done" aria-label="${k.done ? 'Повернути' : 'Виконано'}">${icon('check', 11)}</button>
+    <input value="${esc(k.text)}" data-a="sub-text" aria-label="Підзадача" enterkeyhint="done">
+    <button type="button" class="icon-btn xs" data-a="sub-open" title="Відкрити">${icon('open', 14)}</button>
+    <button type="button" class="icon-btn xs" data-a="sub-del" title="Видалити">${icon('x', 14)}</button></div>`;
+// лічильник і смужка підзадач — без перемальовування картки (фокус і клавіатура лишаються)
+function subsCount() {
+  if (!cur || !cur.el) return;
+  const kids = cur.it.children || [], done = kids.filter(k => k.done).length;
+  const n = cur.el.querySelector('.subs-n'), bar = cur.el.querySelector('.subs-sec .p-bar');
+  if (n) n.textContent = kids.length ? `${done}/${kids.length}` : '';
+  if (bar) { bar.hidden = !kids.length; bar.querySelector('i').style.width = (kids.length ? done / kids.length * 100 : 0) + '%'; }
+}
+let adding = false;
+async function addSub(input, keepBlur) {
+  const text = input.value.trim(); if (!text || adding || !cur) return;
+  adding = true; input.value = '';
+  const parent = cur.it.id;
+  try {
+    const k = await post('assistant/items', { text, parent_id: parent });
+    if (cur && cur.it.id === parent) {
+      cur.it.children = [...(cur.it.children || []), k];
+      cur.el.querySelector('.subs').insertAdjacentHTML('beforeend', subHtml(k));
+      cur.el.querySelector('.subs .sub:last-child').classList.add('enter');
+      subsCount();
+      if (!keepBlur) input.focus();
+    }
+    changed();
+  } catch (err) { fail(err); input.value = text; }
+  adding = false;
+}
+
 function render() {
   const it = cur.it, sp = space(it.area), st = status(it.status);
   const kids = it.children || [], doneKids = kids.filter(k => k.done).length;
@@ -89,7 +121,7 @@ function render() {
         ${propBtn('status', 'status', 'Статус', `${icon(STATUS_ICON[it.status] || 'circle', 14)}<span>${esc(st.name)}</span>`)}
         ${propBtn('area', 'layers', 'Простір', `${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>`)}
         <div class="prop-row"><span class="pk">${icon('calendar')}<span>Строк</span></span>
-          <button type="button" class="pv${it.due_at ? '' : ' empty'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
+          <button type="button" class="pv${it.due_at ? '' : ' none'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
           ${it.due_at && it.kind !== 'note' ? `<button type="button" class="pv-bell${it.kind === 'reminder' ? ' on' : ''}" data-p="kind" aria-pressed="${it.kind === 'reminder'}" title="${it.kind === 'reminder' ? 'Нагадаю в цей час — натисніть, щоб вимкнути' : 'Нагадати в цей час'}">${icon('bell', 15)}<span>${it.kind === 'reminder' ? 'Нагадаю' : 'Нагадати'}</span></button>` : ''}</div>
         ${propBtn('prio', 'flag', 'Пріоритет', it.priority ? `<span class="prio p${it.priority}">${icon('flag', 14)}${PRIO[it.priority].label}</span>` : '', 'Без пріоритету')}
         <div class="prop-row"><span class="pk">${icon('tag')}<span>Теги</span></span>
@@ -98,15 +130,11 @@ function render() {
       </div>
       <datalist id="tagList">${meta.tags.map(t => `<option value="${esc(t.name)}">`).join('')}</datalist>
 
-      ${it.parent ? '' : `<section class="p-sec">
-        <h3>${icon('subtasks', 15)}Підзадачі${kids.length ? ` <span>${doneKids}/${kids.length}</span>` : ''}</h3>
-        ${kids.length ? `<div class="p-bar"><i style="width:${kids.length ? doneKids / kids.length * 100 : 0}%"></i></div>` : ''}
-        <div class="subs">${kids.map(k => `<div class="sub${k.done ? ' done' : ''}" data-id="${k.id}">
-            <button type="button" class="chk sm${k.done ? ' on' : ''}" data-a="sub-done">${icon('check', 11)}</button>
-            <input value="${esc(k.text)}" data-a="sub-text" aria-label="Підзадача">
-            <button type="button" class="icon-btn xs" data-a="sub-open" title="Відкрити">${icon('open', 14)}</button>
-            <button type="button" class="icon-btn xs" data-a="sub-del" title="Видалити">${icon('x', 14)}</button></div>`).join('')}</div>
-        <label class="sub-add">${icon('plus', 15)}<input placeholder="Додати підзадачу" data-a="sub-add"></label>
+      ${it.parent ? '' : `<section class="p-sec subs-sec">
+        <h3>${icon('subtasks', 15)}Підзадачі <span class="subs-n"></span></h3>
+        <div class="p-bar"${kids.length ? '' : ' hidden'}><i></i></div>
+        <div class="subs">${kids.map(subHtml).join('')}</div>
+        <form class="sub-add">${icon('plus', 16)}<input placeholder="Додати підзадачу" data-a="sub-add" enterkeyhint="enter" autocomplete="off" maxlength="2000"><button type="submit" class="sub-go" aria-label="Додати підзадачу">${icon('arrowRight', 16)}</button></form>
       </section>`}
 
       <section class="p-sec">
@@ -115,6 +143,13 @@ function render() {
       </section>
       <p class="p-meta">Створено ${esc(fmtDate(it.created))}${it.updated ? ` · змінено ${esc(fmtDate(it.updated))}` : ''}${it.done && it.done_at ? ` · виконано ${esc(fmtDate(it.done_at))}` : ''}</p>
     </div>`;
+  subsCount();
+  const sf = panel.querySelector('.sub-add');
+  if (sf) {
+    sf.addEventListener('submit', e => { e.preventDefault(); addSub(sf.querySelector('input')); });
+    // написав і перейшов деінде — не губимо текст
+    sf.querySelector('input').addEventListener('blur', e => { if (e.target.value.trim() && !(e.relatedTarget && e.relatedTarget.classList.contains('sub-go'))) addSub(e.target, true); });
+  }
   const ta = panel.querySelector('.p-title textarea'), desc = panel.querySelector('.p-desc');
   autosize(ta); autosize(desc);
   ta.addEventListener('input', () => { autosize(ta); if (ta.value.trim()) saveTitle(ta.value.trim()); });
@@ -161,10 +196,17 @@ async function onClick(e) {
   }
   const row = e.target.closest('.sub');
   if (a === 'sub-done' && row) {
-    const k = it.children.find(x => x.id === +row.dataset.id);
-    try { await post(`assistant/items/${k.id}/${k.done ? 'reopen' : 'complete'}`); openTask(it.id); changed(); } catch (err) { fail(err); }
+    const k = it.children.find(x => x.id === +row.dataset.id); if (!k) return;
+    k.done = !k.done; row.classList.toggle('done', k.done); b.classList.toggle('on', k.done); b.classList.add('pop'); subsCount();
+    try { await post(`assistant/items/${k.id}/${k.done ? 'complete' : 'reopen'}`); changed(); }
+    catch (err) { fail(err); k.done = !k.done; row.classList.toggle('done', k.done); b.classList.toggle('on', k.done); subsCount(); }
   }
-  if (a === 'sub-del' && row) { try { await del('assistant/items/' + row.dataset.id); openTask(it.id); changed(); } catch (err) { fail(err); } }
+  if (a === 'sub-del' && row) {
+    try {
+      await del('assistant/items/' + row.dataset.id);
+      it.children = it.children.filter(x => x.id !== +row.dataset.id); row.remove(); subsCount(); changed();
+    } catch (err) { fail(err); }
+  }
   if (a === 'sub-open' && row) go(taskHref(+row.dataset.id));
   if (a === 'tag-del') save({ tags: (it.tags || []).filter(t => t !== b.dataset.tag) });
 }
@@ -185,12 +227,11 @@ async function onPanelKey(e) {
   if (el.dataset.a === 'tag-add' && (e.key === 'Enter' || e.key === ',')) { e.preventDefault(); return addTag(el); }
   if (el.dataset.a === 'tag-add' && e.key === 'Backspace' && !el.value && cur && (cur.it.tags || []).length) return save({ tags: cur.it.tags.slice(0, -1) });
   if (e.key !== 'Enter') return;
-  if (el.dataset.a === 'sub-add' && el.value.trim()) {
-    e.preventDefault();
-    const text = el.value.trim(); el.value = '';
-    try { await post('assistant/items', { text, parent_id: cur.it.id }); await openTask(cur.it.id); changed(); const i = cur && cur.el.querySelector('[data-a="sub-add"]'); if (i) i.focus(); }
-    catch (err) { fail(err); }
-  } else if (el.dataset.a === 'sub-text' || el.classList.contains('pv-in')) { e.preventDefault(); el.blur(); }
+  if (el.dataset.a === 'sub-add') return;   // додає форма (submit) — так працює й клавіатура телефона
+  if (el.dataset.a === 'sub-text') {
+    // Enter у підзадачі — перейти до поля «Додати підзадачу»
+    e.preventDefault(); el.blur(); const i = cur && cur.el.querySelector('[data-a="sub-add"]'); if (i) i.focus();
+  } else if (el.classList.contains('pv-in')) { e.preventDefault(); el.blur(); }
 }
 
 // ---------- вибір дати й часу ----------
