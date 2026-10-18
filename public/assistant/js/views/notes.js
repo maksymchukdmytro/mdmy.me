@@ -8,12 +8,11 @@ export function notesPage() {
   function render(el) {
     root = el;
     root.innerHTML = `<div class="page">
-      <div class="page-head"><div class="page-icon">${icon('note', 30)}</div><h1 class="page-title">Нотатки</h1>
-        <p class="page-desc">Думки, ідеї й записи. Надиктуйте на «Запис голосом» або додайте тут. Пошук шукає по всьому, що ви казали асистенту; #тег — за тегом.</p></div>
+      <div class="page-head"><h1 class="page-title">Нотатки</h1></div>
       <div class="vbar"><div class="vtools wide">
         <label class="vsearch grow">${icon('search', 15)}<input type="search" placeholder="Пошук або #тег"></label>
       </div></div>
-      <div class="note-add"><textarea rows="2" placeholder="Нова нотатка… Ctrl+Enter — зберегти"></textarea><button type="button" class="btn primary sm">Зберегти</button></div>
+      <div class="note-add"><textarea rows="2" placeholder="Нова нотатка…"></textarea><button type="button" class="btn primary sm">Зберегти</button></div>
       <div class="notes"></div></div>`;
     const s = $('.vsearch input', root), ta = $('.note-add textarea', root);
     s.addEventListener('input', debounce(() => { q = s.value.trim(); load(); }, 250));

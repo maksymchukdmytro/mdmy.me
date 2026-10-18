@@ -29,9 +29,7 @@ export function tasksPage(cfg) {
     root = el; top = topAct;
     root.innerHTML = `<div class="page tasks-page" data-layout="${st.mode}">
       <div class="page-head">
-        <div class="page-icon">${icon(cfg.icon, 30)}</div>
         <h1 class="page-title">${esc(cfg.title)}</h1>
-        ${cfg.desc ? `<p class="page-desc">${esc(cfg.desc)}</p>` : ''}
       </div>
       <div class="inbox-bar" hidden></div>
       <div class="vbar">
@@ -42,10 +40,8 @@ export function tasksPage(cfg) {
         <div class="vtools">
           <label class="vsearch">${icon('search', 15)}<input type="search" placeholder="Пошук" aria-label="Пошук у задачах"></label>
           <button type="button" class="tbtn" data-t="filter" title="Фільтр">${icon('filter', 15)}<span>Фільтр</span></button>
-          <button type="button" class="tbtn list-only" data-t="sort" title="Сортування">${icon('sort', 15)}<span>Сортування</span></button>
-          <button type="button" class="tbtn list-only" data-t="group" title="Групування">${icon('group', 15)}<span>Групи</span></button>
+          <button type="button" class="tbtn list-only" data-t="look" title="Сортування й групи">${icon('sort', 15)}<span>Вигляд</span></button>
           <button type="button" class="tbtn" data-t="select" title="Вибрати кілька">${icon('check', 15)}<span>Вибрати</span></button>
-          <button type="button" class="btn primary sm" data-t="new">${icon('plus', 15)}<span>Нова</span></button>
         </div>
       </div>
       <div class="fchips"></div>
@@ -111,8 +107,8 @@ export function tasksPage(cfg) {
     const bar = $('.inbox-bar', root), n = (meta.counts || {}).inbox || 0;
     bar.hidden = !(cfg.area === 'inbox' && n > 0 && !st.showDone);
     if (bar.hidden) return;
-    bar.innerHTML = `<span>${icon('inbox', 16)}<b>${n}</b> ${n === 1 ? 'задача чекає' : 'задач чекають'}, щоб їх розклали по просторах</span>
-      <button type="button" class="btn primary sm" data-t="triage">${icon('arrowRight', 14)}Розкласти по одній</button>
+    bar.innerHTML = `<span>Асистент не зміг розкласти <b>${n}</b> ${n === 1 ? 'задачу' : n < 5 ? 'задачі' : 'задач'}</span>
+      <button type="button" class="btn primary sm" data-t="triage">Розкласти по одній</button>
       <button type="button" class="btn sm" data-t="suggest">${icon('sparkles', 14)}Підказати</button>
       ${st.sug.size ? `<button type="button" class="btn sm" data-t="accept">${icon('check', 14)}Прийняти підказки (${st.sug.size})</button>` : ''}`;
   }
@@ -166,7 +162,7 @@ export function tasksPage(cfg) {
     if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
     if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
     if (it.project && !child) out.push(`<span class="prop">${icon('folder', 13)}${esc(it.project)}</span>`);
-    if (cross && !child && it.area !== 'inbox') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
+    if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
     return out.join('');
   }
   function rowHtml(it, child) {
@@ -203,8 +199,7 @@ export function tasksPage(cfg) {
     $('.more', root).hidden = true;
     box.innerHTML = `<div class="board">${st.columns.map(c => `
       <section class="col" data-status="${c.status}">
-        <header class="col-h"><span class="col-t st-${c.status}">${icon(STATUS_ICON[c.status] || 'circle', 14)}${esc(c.name)}</span><b>${c.total}</b>
-          ${c.done ? '' : `<button type="button" class="icon-btn xs" data-a="col-add" title="Нова картка">${icon('plus', 14)}</button>`}</header>
+        <header class="col-h"><span class="col-t st-${c.status}">${icon(STATUS_ICON[c.status] || 'circle', 14)}${esc(c.name)}</span><b>${c.total}</b></header>
         <div class="col-body">${c.items.map(cardHtml).join('')}
           ${c.done ? (c.total > c.items.length ? `<p class="col-note">ще ${c.total - c.items.length}</p>` : '') + '<p class="col-note">за останні 14 днів</p>'
                    : `<button type="button" class="col-add" data-a="col-add">${icon('plus', 14)}Нова</button>`}
@@ -288,6 +283,10 @@ export function tasksPage(cfg) {
   }
 
   // ---------- додавання ----------
+  function newTask() {
+    if (st.mode === 'board') { const b = $('.col:not([data-status="done"]) .col-add', root); if (b) b.click(); }
+    else { const i = $('.qadd-in', root); if (i) { i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+  }
   async function quickAdd(text, extra = {}) {
     const area = cfg.area === 'all' ? 'inbox' : cfg.area;
     const due = cfg.view === 'today' ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d; })() : null;
@@ -460,17 +459,17 @@ export function tasksPage(cfg) {
     }
     if (t) {
       const k = t.dataset.t;
-      if (k === 'new') {
-        if (st.mode === 'board') { const col = $('.col:not([data-status="done"]) .col-add', root); if (col) col.click(); }
-        else { const i = $('.qadd-in', root); i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-      }
       if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
       if (k === 'triage') triage();
       if (k === 'suggest') suggest(t);
       if (k === 'accept') acceptAll();
       if (k === 'ai-add') aiAdd($('.qadd-in', root));
-      if (k === 'sort') { const v = await menu(t, SORTS.map(([v, l]) => ({ value: v, label: l, checked: st.sort === v }))); if (v) { st.sort = v; pref.set(K('sort'), v); load(); } }
-      if (k === 'group') { const v = await menu(t, GROUPS.map(([v, l]) => ({ value: v, label: l, checked: st.group === v }))); if (v) { st.group = v; pref.set(K('group'), v); drawList(); } }
+      if (k === 'look') {
+        const v = await menu(t, [{ head: 'Сортування' }, ...SORTS.map(([v, l]) => ({ value: 's:' + v, label: l, checked: st.sort === v })),
+                                 { head: 'Групи' }, ...GROUPS.map(([v, l]) => ({ value: 'g:' + v, label: l, checked: st.group === v }))], { width: 230 });
+        if (v && v[0] === 's') { st.sort = v.slice(2); pref.set(K('sort'), st.sort); load(); }
+        if (v && v[0] === 'g') { st.group = v.slice(2); pref.set(K('group'), st.group); drawList(); }
+      }
       if (k === 'filter') {
         const items = [];
         if (!fixedView) items.push(...VIEWS.map(([v, l]) => ({ value: 'view:' + v, label: l, icon: 'calendar', checked: st.view === v })), { sep: true });
@@ -547,7 +546,7 @@ export function tasksPage(cfg) {
   }
   function onKey(e) {
     if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-wrap, .pal-wrap, .panel-wrap')) return;
-    if (e.key === 'n' || e.key === 'т' || e.key === 'c' || e.key === 'с') { e.preventDefault(); $('[data-t="new"]', root).click(); }
+    if (e.key === 'n' || e.key === 'т' || e.key === 'c' || e.key === 'с') { e.preventDefault(); newTask(); }
     if (e.key === 'b' || e.key === 'и') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); load(); }
     if (e.key === 'Escape' && st.selecting) { st.selecting = false; st.sel.clear(); draw(); }
   }

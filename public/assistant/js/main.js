@@ -12,6 +12,7 @@ import { recordPage } from './views/record.js';
 import { settingsPage } from './views/settings.js';
 import { parse, go, taskHref } from './nav.js';
 import * as push from './push.js';
+import { holdToTalk } from './hold.js';
 
 const app = $('#app');
 let account = null, current = null, currentKey = '';
@@ -56,8 +57,8 @@ function shell() {
         <a class="ws" href="#/today"><span class="ws-logo">m</span><span class="ws-name">${esc(account.name || 'mdmy')}</span></a>
         <button class="icon-btn" data-act="side-toggle" title="Сховати панель">${icon('sidebar')}</button>
       </div>
-      <button class="side-item" data-act="search">${icon('search')}<span>Пошук</span><kbd>Ctrl K</kbd></button>
-      <a class="side-item" href="#/record" data-r="record">${icon('mic')}<span>Запис голосом</span></a>
+      <button class="side-item desk-only" data-act="search">${icon('search')}<span>Пошук</span><kbd>Ctrl K</kbd></button>
+      <a class="side-item desk-only" href="#/record" data-r="record">${icon('mic')}<span>Запис голосом</span></a>
       <div class="side-gap"></div>
       <a class="side-item" href="#/today" data-r="today">${icon('sun')}<span>Сьогодні</span><b class="n" data-n="today"></b></a>
       <a class="side-item" href="#/upcoming" data-r="upcoming">${icon('upcoming')}<span>Найближчі 7 днів</span></a>
@@ -85,13 +86,14 @@ function shell() {
     <nav class="tabbar" aria-label="Швидкі переходи">
       <a href="#/today" data-r="today">${icon('sun', 20)}<span>Сьогодні</span></a>
       <a href="#/s/inbox" data-r="s/inbox">${icon('inbox', 20)}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
-      <a href="#/record" data-r="record" class="tab-mic">${icon('mic', 22)}</a>
+      <button type="button" data-r="record" class="tab-mic" aria-label="Запис голосом: натисніть — відкрити, утримуйте — говорити">${icon('mic', 22)}</button>
       <button type="button" data-act="search">${icon('search', 20)}<span>Пошук</span></button>
       <button type="button" data-act="side-open">${icon('menu', 20)}<span>Меню</span></button>
     </nav>
   </div>`;
   renderSideSpaces();
   app.addEventListener('click', onShellClick);
+  holdToTalk($('.tab-mic', app));
 }
 function renderSideSpaces() {
   const box = $('#sideSpaces'); if (!box) return;
@@ -132,12 +134,12 @@ async function onShellClick(e) {
 
 // ---------- маршрути (nav.js) ----------
 function pageFor(key, parts) {
-  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space', desc: 'Прострочене й заплановане на сьогодні з усіх просторів' });
-  if (key === 'upcoming') return tasksPage({ key, title: 'Найближчі 7 днів', icon: 'upcoming', area: 'all', view: 'week', group: 'date', desc: 'Усе, що має строк протягом тижня' });
+  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'space' });
+  if (key === 'upcoming') return tasksPage({ key, title: 'Найближчі 7 днів', icon: 'upcoming', area: 'all', view: 'week', group: 'date' });
   if (key === 'all') return tasksPage({ key, title: 'Усі задачі', icon: 'layers', area: 'all', view: 'open', group: 'space' });
   if (key.startsWith('s/')) {
     const sp = space(parts[1] || 'inbox');
-    return tasksPage({ key, title: sp.name, icon: sp.icon, area: sp.key, view: 'open', group: 'date', desc: sp.key === 'inbox' ? 'Задачі, які асистент не зміг однозначно віднести до простору. Розкладіть їх.' : sp.description });
+    return tasksPage({ key, title: sp.name, icon: sp.icon, area: sp.key, view: 'open', group: 'date' });
   }
   if (key === 'notes') return notesPage();
   if (key === 'state') return statePage();
@@ -171,6 +173,8 @@ function route() {
   if (!task && panelOpenId()) closeTask();
 }
 addEventListener('hashchange', route);
+// назва сторінки у верхній смузі зʼявляється, лише коли великий заголовок прокручено
+addEventListener('scroll', () => { const sh = $('#shell'); if (sh) sh.classList.toggle('scrolled', scrollY > 56); }, { passive: true });
 
 // зміни даних (з будь-якого місця) → оновити поточну сторінку й лічильники
 const changed = debounce(() => { refreshMeta().catch(() => {}); if (current && current.refresh) current.refresh(); }, 120);

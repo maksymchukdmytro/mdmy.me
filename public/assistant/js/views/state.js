@@ -12,7 +12,7 @@ export function statePage() {
   function render(el) {
     root = el;
     root.innerHTML = `<div class="page">
-      <div class="page-head"><div class="page-icon">${icon('activity', 30)}</div><h1 class="page-title">Стан і звички</h1>
+      <div class="page-head"><h1 class="page-title">Стан і звички</h1>
         <p class="page-desc">Скажіть асистенту: «настрій 7, енергія 6, спав 7 годин, зробив зарядку» — і тут зʼявиться картина за два тижні.</p></div>
       <div class="state"></div></div>`;
     addEventListener('resize', onResize);

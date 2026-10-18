@@ -13,7 +13,7 @@ export function settingsPage(sub) {
   function render(el) {
     root = el;
     root.innerHTML = `<div class="page settings">
-      <div class="page-head"><div class="page-icon">${icon('settings', 30)}</div><h1 class="page-title">Налаштування</h1></div>
+      <div class="page-head"><h1 class="page-title">Налаштування</h1></div>
       <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
         .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}">${l}</a>`).join('')}</nav>
 
@@ -116,7 +116,7 @@ export function settingsPage(sub) {
       <button type="button" class="icon-btn sp-ic" data-a="sp-icon" title="Іконка">${icon(sp.icon, 18)}</button>
       <div class="sp-main">
         <input class="sp-name" value="${esc(sp.name)}" maxlength="40" aria-label="Назва">
-        <textarea class="sp-desc" rows="1" maxlength="600" placeholder="${sp.key === 'inbox' ? 'Вхідні — для нерозкладених задач' : 'Що сюди належить: напр. інтернет-магазин, клієнти, постачальники, LP-CRM…'}" ${sp.key === 'inbox' ? 'disabled' : ''}>${esc(sp.key === 'inbox' ? '' : sp.description)}</textarea>
+        <textarea class="sp-desc" rows="1" maxlength="600" placeholder="${sp.key === 'inbox' ? 'Вхідні — для нерозкладених задач' : 'Що сюди належить — підказка асистенту'}" ${sp.key === 'inbox' ? 'disabled' : ''}>${esc(sp.key === 'inbox' ? '' : sp.description)}</textarea>
       </div>
       <button type="button" class="icon-btn" data-a="sp-more" title="Ще">${icon('more')}</button>
     </div>`).join('');

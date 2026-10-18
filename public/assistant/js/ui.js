@@ -57,7 +57,7 @@ export function toast(text, undo, ms = 4000) {
 export const fail = e => toast(e && e.message ? e.message : String(e));
 
 // ---------- спливаюче меню ----------
-// items: [{ value, label, icon, checked, danger, hint, sep }]; повертає Promise з вибраним value (або undefined)
+// items: [{ value, label, icon, checked, danger, hint, sep, head }]; повертає Promise з вибраним value (або undefined)
 let openMenu = null;
 export function menu(anchor, items, { width, filter } = {}) {
   closeMenu();
@@ -66,8 +66,8 @@ export function menu(anchor, items, { width, filter } = {}) {
     box.className = 'pop'; box.setAttribute('role', 'menu');
     if (width) box.style.minWidth = width + 'px';
     const render = q => {
-      const list = items.filter(it => it.sep || !q || String(it.label).toLowerCase().includes(q));
-      box.querySelector('.pop-list').innerHTML = list.map((it, i) => it.sep ? '<div class="pop-sep"></div>' :
+      const list = items.filter(it => it.sep || it.head || !q || String(it.label).toLowerCase().includes(q));
+      box.querySelector('.pop-list').innerHTML = list.map((it, i) => it.sep ? '<div class="pop-sep"></div>' : it.head ? `<div class="pop-head">${esc(it.head)}</div>` :
         `<button type="button" class="pop-item${it.danger ? ' danger' : ''}${it.checked ? ' on' : ''}" data-i="${items.indexOf(it)}" role="menuitem">
           ${it.icon ? `<span class="pop-ic">${it.icon.startsWith('<') ? it.icon : icon(it.icon, 16)}</span>` : ''}<span class="pop-l">${esc(it.label)}</span>
           ${it.hint ? `<span class="pop-h">${esc(it.hint)}</span>` : ''}${it.checked ? icon('check', 14, 'pop-ck') : ''}</button>`).join('') || '<div class="pop-empty">Нічого</div>';

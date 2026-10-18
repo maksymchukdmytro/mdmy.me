@@ -43,7 +43,10 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font);-
 button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 button{cursor:pointer}
 a{color:inherit}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* поля вводу мають власний стан фокусу; рамка навколо «невидимих» полів (назва, опис, пошук) виглядала б як артефакт */
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none}
+.pv-in::-webkit-calendar-picker-indicator{display:none!important}
 .ic{flex:none;display:block}
 kbd{font:500 11px/1 var(--font);color:var(--text-3);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px;padding:2px 5px;background:var(--bg)}
 code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg-3);padding:1px 5px;border-radius:4px}
@@ -113,7 +116,8 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .topbar{position:sticky;top:0;z-index:20;height:44px;display:flex;align-items:center;gap:6px;padding:0 12px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px)}
 .show-side{display:none}
 .side-hidden .show-side{display:inline-grid}
-.crumbs{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--text-2);min-width:0}
+.crumbs{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--text-2);min-width:0;opacity:0;transition:opacity .15s}
+.scrolled .crumbs{opacity:1}
 .crumbs span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top-act{margin-left:auto;display:flex;gap:4px}
 .view{min-height:calc(100vh - 44px)}
@@ -121,8 +125,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 
 /* ---------- сторінка ---------- */
 .page{max-width:1000px;margin:0 auto;padding:28px 48px 120px}
-.page-head{margin:12px 0 18px}
-.page-icon{color:var(--text);margin-bottom:10px}
+.page-head{margin:24px 0 18px}
 .page-title{margin:0;font-size:34px;line-height:1.15;font-weight:700;letter-spacing:-.025em}
 .page-desc{margin:8px 0 0;color:var(--text-2);max-width:680px}
 .empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:48px 16px;color:var(--text-3);text-align:center}
@@ -144,7 +147,6 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .vsearch input{border:0;background:transparent;padding:0;min-height:0;width:110px;box-shadow:none;font-size:13.5px}
 .vsearch input:focus{width:170px;box-shadow:none}
 .vsearch.grow{flex:1}.vsearch.grow input{width:100%}
-.vtools .btn{margin-left:6px}
 .tasks-page[data-layout="board"] .list-only{display:none}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .fchips:empty{display:none}
@@ -156,7 +158,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 
 /* «вхідні» */
 .inbox-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;margin-bottom:14px;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
-.inbox-bar>span{display:flex;align-items:center;gap:7px;margin-right:auto;color:var(--text-2)}
+.inbox-bar>span{margin-right:auto;color:var(--text-2)}
 .inbox-bar b{color:var(--text)}
 
 /* ---------- список ---------- */
@@ -262,6 +264,9 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .pv.static{cursor:default}.pv.static:hover{background:none}
 .pv .late{color:var(--red)}
 .pv .prio{display:inline-flex;align-items:center;gap:5px}
+.pv-bell{display:inline-flex;align-items:center;gap:5px;flex:none;height:28px;padding:0 9px;margin-left:4px;border:1px solid var(--line-2);border-radius:999px;background:transparent;color:var(--text-2);font-size:13px}
+.pv-bell:hover{background:var(--hover);color:var(--text)}
+.pv-bell.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .p-sec{border-top:1px solid var(--line);padding-top:14px;margin-bottom:20px}
 .p-sec h3{display:flex;align-items:center;gap:7px;margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--text-2)}
 .p-sec h3 span{color:var(--text-3);font-weight:500}
@@ -290,6 +295,8 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .pop-h{color:var(--text-3);font-size:12.5px}
 .pop-ck{color:var(--text)}
 .pop-sep{height:1px;background:var(--line);margin:4px 2px}
+.pop-head{padding:8px 8px 4px;font-size:12px;font-weight:600;color:var(--text-3)}
+.pop-head:not(:first-child){margin-top:4px;border-top:1px solid var(--line)}
 .pop-empty{padding:8px;color:var(--text-3)}
 .date-pop{width:270px}
 .date-in{display:block;padding:4px}
@@ -336,7 +343,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 
 /* ---------- нотатки ---------- */
 .note-add{display:flex;gap:8px;align-items:flex-end;margin:6px 0 14px}
-.note-add textarea{flex:1;min-height:42px}
+.note-add textarea{flex:1;min-height:42px;resize:none;field-sizing:content;max-height:40vh}
 .notes{columns:2 300px;column-gap:12px}
 .note{break-inside:avoid;margin:0 0 12px;padding:12px 14px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 .note p{margin:0 0 8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}
@@ -380,6 +387,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .rec-btn.on .ic{display:none}.rec-btn.on .rec-stop{display:block;background:#fff}
 .rec-btn:disabled{opacity:.5}
 .rec-status{margin:0;color:var(--text-2);font-variant-numeric:tabular-nums;min-height:21px;text-align:center}
+.rec-opts{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px}
 .rec-status.err{color:var(--red)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:7px;animation:blink 1s steps(2,start) infinite}
 @keyframes blink{to{visibility:hidden}}
@@ -394,6 +402,17 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .reply.err{color:var(--red);background:var(--red-bg)}
 .reply .btn{margin-top:8px}
 .hitem footer{display:flex;justify-content:space-between;align-items:center;color:var(--text-3);font-size:12px}
+
+/* утримання центральної кнопки — запис */
+.ptt{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));z-index:60;display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px 16px 22px;background:var(--bg);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(15,15,15,.08);pointer-events:none;animation:pin .14s ease}
+.ptt.out{opacity:0;transition:opacity .15s}
+.ptt-dot{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:var(--bg-3);color:var(--text-2);transition:background .12s,box-shadow .08s}
+.ptt.live .ptt-dot{background:var(--red);color:#fff;box-shadow:0 0 0 calc(var(--lv,0) * 26px) var(--red-bg)}
+.ptt.cancel .ptt-dot{background:var(--text-3);box-shadow:none}
+.ptt-t{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.ptt-h{color:var(--text-2);font-size:13px}
+.ptt.cancel .ptt-h{color:var(--red)}
+@keyframes pin{from{opacity:0;transform:translateY(8px)}}
 
 /* ---------- налаштування ---------- */
 .set-nav{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:8px;position:sticky;top:44px;background:var(--bg);z-index:5}
@@ -416,11 +435,11 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .sp-row{display:flex;align-items:flex-start;gap:10px;padding:10px 10px;border-bottom:1px solid var(--line)}
 .sp-row:last-child{border-bottom:0}
 .sp-row.arch{opacity:.5}
-.sp-ic{width:34px;height:34px;color:var(--text)}
+.sp-ic{width:34px;height:34px;color:var(--text);margin-top:-2px}
 .sp-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .sp-name{border:0;font-weight:600;padding:4px 6px;min-height:0;box-shadow:none!important;background:transparent}
 .sp-name:hover,.sp-desc:hover{background:var(--hover)}
-.sp-desc{border:0;padding:3px 6px;min-height:0;resize:vertical;font-size:13px;color:var(--text-2);box-shadow:none!important;background:transparent}
+.sp-desc{border:0;padding:3px 6px;min-height:0;resize:none;field-sizing:content;width:100%;font-size:13px;color:var(--text-2);box-shadow:none!important;background:transparent}
 .sp-desc:disabled{display:none}
 .sessions{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
 .sess{display:flex;align-items:center;gap:10px;padding:6px 0}
@@ -436,19 +455,26 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 
 /* ---------- телефон і планшет ---------- */
 @media (max-width:899px){
-  .side{transform:translateX(-100%);width:min(300px,86vw);box-shadow:var(--shadow-lg)}
-  .app.side-open .side{transform:none}
-  .app.side-open .side-scrim{display:block;position:fixed;inset:0;background:var(--scrim);z-index:25}
+  .side{transform:translateX(-100%);width:min(300px,86vw);z-index:40;visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  .app.side-open .side{transform:none;visibility:visible;box-shadow:var(--shadow-lg);transition:transform .2s ease}
+  .app.side-open .side-scrim{display:block;position:fixed;inset:0;background:var(--scrim);z-index:38}
+  .desk-only{display:none}
+  .side{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .main,.side-hidden .main{margin-left:0}
   .show-side{display:inline-grid}
   .side-top .icon-btn{display:none}
-  .page{padding:12px 16px 120px}
-  .page-title{font-size:28px}
+  .page{padding:4px 16px 120px}
+  .page-head{margin:12px 0 14px}
+  .page-title{font-size:26px}
+  .tasks-page[data-layout="board"]{padding-left:16px;padding-right:16px}
+  .board{margin:0 -16px;padding:4px 16px 16px;scroll-padding:0 16px}
+  .p-title textarea{font-size:22px}
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:35;height:calc(58px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg);border-top:1px solid var(--line)}
   .tabbar>a,.tabbar>button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;color:var(--text-3);text-decoration:none;font-size:10.5px;position:relative}
   .tabbar .on{color:var(--text)}
-  .tabbar .tab-mic{flex:0 0 64px}
-  .tabbar .tab-mic .ic{background:var(--accent);color:var(--accent-ink);border-radius:50%;width:44px;height:44px;padding:11px}
+  .tabbar .tab-mic{flex:0 0 64px;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  .tabbar .tab-mic .ic{background:var(--accent);color:var(--accent-ink);border-radius:50%;width:44px;height:44px;padding:11px;transition:transform .12s,background .12s}
+  .tabbar .tab-mic.rec .ic{background:var(--red);color:#fff;transform:scale(1.12)}
   .tabbar .n.badge:not(:empty){position:absolute;top:6px;left:calc(50% + 6px);font-size:10px;line-height:15px;min-width:15px;padding:0 4px}
   .bulk{bottom:calc(66px + env(safe-area-inset-bottom))}
   .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
@@ -461,10 +487,10 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
   .row{flex-wrap:wrap;padding:7px 6px 7px 30px;gap:2px 8px}
   .row-main{flex-basis:calc(100% - 30px)}
   .row-title{white-space:normal}
-  .row-props{max-width:none;flex-wrap:wrap;margin-left:22px;width:100%}
+  .row-props{max-width:none;flex-wrap:wrap;width:100%;padding-left:20px}
   .row-props:empty{display:none}
   .row-sel{top:19px;transform:none}
-  .col{flex-basis:84vw;scroll-snap-align:center}
+  .col{flex-basis:80vw;scroll-snap-align:start}
   .panel{width:100vw}
   .panel-body{padding:16px 18px 80px}
   .pk{width:120px}
@@ -473,5 +499,13 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
   .set-nav{top:44px;overflow-x:auto;flex-wrap:nowrap}
   .side-item{height:36px}
 }
-@media (hover:none){.sub .icon-btn,.note-del{opacity:1}.row-sel{opacity:0}.selecting .row-sel{opacity:1}}
+@media (hover:none){
+  .sub .icon-btn,.note-del{opacity:1}
+  .row-sel,.row:hover .row-sel{opacity:0}.selecting .row-sel,.selecting .row:hover .row-sel,.row.sel .row-sel{opacity:1}
+  /* на сенсорних екранах :hover «залипає» після дотику — сірі плями лишаються на рядках і кнопках */
+  .row:hover,.side-item:hover,.tbtn:hover,.icon-btn:hover,.btn.ghost:hover,.pv:hover,.pv-in:hover,.sub:hover,.col-add:hover,.qchip:hover,.fchip:hover,.vsearch:hover,.sp-name:hover,.sp-desc:hover,.pop-item:hover,.pal-item:hover,.ws:hover{background:transparent}
+  .row.sel:hover{background:var(--active)}.side-item.on:hover{background:var(--active)}.tbtn.on:hover{background:var(--active)}.pal-item.on{background:var(--hover)}
+  .row-sel input{width:18px;height:18px}
+  kbd{display:none}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

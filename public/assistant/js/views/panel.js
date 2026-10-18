@@ -86,9 +86,10 @@ function render() {
       <div class="props">
         ${propBtn('status', 'status', 'Статус', `${icon(STATUS_ICON[it.status] || 'circle', 14)}<span>${esc(st.name)}</span>`)}
         ${propBtn('area', 'layers', 'Простір', `${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>`)}
-        ${propBtn('due', 'calendar', it.kind === 'reminder' ? 'Нагадати' : 'Строк', it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : '', 'Без строку')}
+        <div class="prop-row"><span class="pk">${icon('calendar')}<span>Строк</span></span>
+          <button type="button" class="pv${it.due_at ? '' : ' empty'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
+          ${it.due_at && it.kind !== 'note' ? `<button type="button" class="pv-bell${it.kind === 'reminder' ? ' on' : ''}" data-p="kind" aria-pressed="${it.kind === 'reminder'}" title="${it.kind === 'reminder' ? 'Нагадаю в цей час — натисніть, щоб вимкнути' : 'Нагадати в цей час'}">${icon('bell', 15)}<span>${it.kind === 'reminder' ? 'Нагадаю' : 'Нагадати'}</span></button>` : ''}</div>
         ${propBtn('prio', 'flag', 'Пріоритет', it.priority ? `<span class="prio p${it.priority}">${icon('flag', 14)}${PRIO[it.priority].label}</span>` : '', 'Без пріоритету')}
-        ${propBtn('kind', it.kind === 'reminder' ? 'bell' : 'check', 'Тип', it.kind === 'reminder' ? 'Нагадування в Telegram' : 'Задача')}
         <div class="prop-row"><span class="pk">${icon('folder')}<span>Проєкт</span></span>
           <input class="pv-in" data-p="project" list="projList" value="${esc(it.project || '')}" placeholder="Порожньо"></div>
         <div class="prop-row"><span class="pk">${icon('tag')}<span>Теги</span></span>
@@ -153,11 +154,7 @@ async function onClick(e) {
     const v = await menu(b, PRIO.map(x => ({ value: String(x.v), label: x.label, icon: x.v ? 'flag' : 'circle', checked: x.v === it.priority })));
     if (v != null && +v !== it.priority) save({ priority: +v });
   }
-  if (p === 'kind') {
-    const v = await menu(b, [{ value: 'task', label: 'Задача', icon: 'check', checked: it.kind === 'task' },
-                             { value: 'reminder', label: 'Нагадування в Telegram', icon: 'bell', checked: it.kind === 'reminder', hint: it.due_at ? '' : 'потрібен час' }]);
-    if (v && v !== it.kind) { if (v === 'reminder' && !it.due_at) return toast('Спершу задайте час нагадування'); save({ kind: v }); }
-  }
+  if (p === 'kind' && it.due_at && it.kind !== 'note') save({ kind: it.kind === 'reminder' ? 'task' : 'reminder' });
   if (p === 'due') {
     const v = await datePicker(b, it.due_at);
     if (v !== undefined) save({ due: v });
