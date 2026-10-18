@@ -88,7 +88,7 @@ function shell() {
     <nav class="tabbar" aria-label="Швидкі переходи">
       <a href="#/today" data-r="today">${icon('sun', 20)}<span>Сьогодні</span></a>
       <a href="#/s/inbox" data-r="s/inbox">${icon('inbox', 20)}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
-      <button type="button" data-r="record" class="tab-mic" aria-label="Запис голосом: натисніть — відкрити, утримуйте — говорити">${icon('mic', 22)}</button>
+      <button type="button" data-r="record" class="tab-mic" aria-label="Нова задача голосом: натисніть — говорити, утримуйте — надіслати одразу">${icon('mic', 22)}</button>
       <a href="#/all" data-r="all">${icon('layers', 20)}<span>Усі задачі</span></a>
       <button type="button" data-act="side-open">${icon('menu', 20)}<span>Меню</span></button>
     </nav>

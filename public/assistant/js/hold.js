@@ -1,17 +1,22 @@
-// Центральна кнопка внизу (телефон): коротке натискання — сторінка «Запис голосом»,
+// Центральна кнопка внизу (телефон): коротке натискання — нова задача голосом (одразу слухає),
 // утримання — одразу запис; відпустити — надіслати асистенту, відвести палець убік чи вгору — скасувати.
 import { icon } from './icons.js';
 import { toast, pref } from './ui.js';
 import { go } from './nav.js';
 import { recorder, micError, transcribe, history, ask, MAX_SEC } from './voice.js';
 import { post } from './api.js';
+import { compose } from './views/composer.js';
 
 const HOLD_MS = 250, CANCEL_PX = 70;
 
 export function holdToTalk(btn) {
   let skipClick = false;
   btn.addEventListener('contextmenu', e => e.preventDefault());
-  btn.addEventListener('click', e => { e.preventDefault(); if (skipClick) { skipClick = false; return; } go('#/record'); });
+  btn.addEventListener('click', e => {
+    e.preventDefault(); if (skipClick) { skipClick = false; return; }
+    const m = /^#\/s\/([a-z0-9]+)/.exec(location.hash);   // у просторі — нова задача туди ж
+    compose({ area: m ? m[1] : 'inbox', voice: true });
+  });
   btn.addEventListener('pointerdown', e => {
     if (e.button > 0) return;
     const sx = e.clientX, sy = e.clientY;

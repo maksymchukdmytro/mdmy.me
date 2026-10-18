@@ -587,7 +587,7 @@ export function tasksPage(cfg) {
       if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
       if (k === 'compose') {
         const due = isToday ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d.getTime(); })() : null;
-        const id = await compose({ area: cfg.area, due, from: t });
+        const id = await compose({ area: cfg.area, due });
         if (id) st.flash = id;
         return;
       }
