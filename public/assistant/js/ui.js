@@ -56,11 +56,52 @@ export function toast(text, undo, ms = 4000) {
 }
 export const fail = e => toast(e && e.message ? e.message : String(e));
 
+// ---------- телефон: нижні аркуші ----------
+export const isPhone = () => matchMedia('(max-width: 899px)').matches;
+export const wait = ms => new Promise(r => setTimeout(r, ms));
+// Нижній аркуш: виїжджає знизу, закривається тапом по тлу, Esc або свайпом униз за верхню смужку.
+export function sheet(inner, { cls = '', onClose, label = '' } = {}) {
+  const w = document.createElement('div'); w.className = 'sheet-wrap';
+  w.innerHTML = `<div class="sheet ${cls}" role="dialog" aria-modal="true" aria-label="${esc(label)}"><div class="sheet-grab" aria-hidden="true"></div>${inner}</div>`;
+  document.body.append(w);
+  requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('in')));
+  const el = w.querySelector('.sheet');
+  let closed = false;
+  const key = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  function close() {
+    if (closed) return; closed = true;
+    document.removeEventListener('keydown', key, true);
+    w.classList.remove('in'); el.style.transform = '';
+    setTimeout(() => w.remove(), 280);
+    if (onClose) onClose();
+  }
+  document.addEventListener('keydown', key, true);
+  w.addEventListener('click', e => { if (e.target === w) close(); });
+  dragToClose(el, close);
+  return { el, close, wrap: w };
+}
+// Потягнути вниз за «ручку» (верхня смужка або шапка) — закрити
+export function dragToClose(el, close, handle = '.sheet-grab, .sheet-head, .panel-top', phoneOnly = false) {
+  el.addEventListener('pointerdown', e => {
+    if ((phoneOnly && !isPhone()) || e.button > 0 || !e.target.closest(handle) || e.target.closest('button, input, a, textarea')) return;
+    const y0 = e.clientY, t0 = Date.now(); let dy = 0;
+    el.style.transition = 'none';
+    const move = ev => { dy = Math.max(0, ev.clientY - y0); el.style.transform = `translateY(${dy}px)`; };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      el.style.transition = '';
+      if (dy > 90 || (dy > 30 && dy / (Date.now() - t0) > 0.5)) close(); else el.style.transform = '';
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  });
+}
+
 // ---------- спливаюче меню ----------
 // items: [{ value, label, icon, checked, danger, hint, sep, head }]; повертає Promise з вибраним value (або undefined)
 let openMenu = null;
-export function menu(anchor, items, { width, filter } = {}) {
+export function menu(anchor, items, { width, filter, title } = {}) {
   closeMenu();
+  if (isPhone()) return menuSheet(items, { filter, title });
   return new Promise(resolve => {
     const box = document.createElement('div');
     box.className = 'pop'; box.setAttribute('role', 'menu');
@@ -87,6 +128,23 @@ export function menu(anchor, items, { width, filter } = {}) {
     const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(undefined); } };
     setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); });
     openMenu = { box, off() { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', key, true); } };
+  });
+}
+const itemHtml = (it, items) => it.sep ? '<div class="pop-sep"></div>' : it.head ? `<div class="pop-head">${esc(it.head)}</div>` :
+  `<button type="button" class="pop-item${it.danger ? ' danger' : ''}${it.checked ? ' on' : ''}" data-i="${items.indexOf(it)}" role="menuitem">
+    ${it.icon ? `<span class="pop-ic">${it.icon.startsWith('<') ? it.icon : icon(it.icon, 18)}</span>` : ''}<span class="pop-l">${esc(it.label)}</span>
+    ${it.hint ? `<span class="pop-h">${esc(it.hint)}</span>` : ''}${it.checked ? icon('check', 16, 'pop-ck') : ''}</button>`;
+// На телефоні меню — нижній аркуш з великими пунктами
+function menuSheet(items, { filter, title }) {
+  return new Promise(resolve => {
+    let v;
+    const s = sheet(`${title ? `<div class="sheet-head"><b>${esc(title)}</b></div>` : ''}${filter ? `<input class="pop-q" placeholder="${esc(filter)}">` : ''}<div class="pop-list sheet-list"></div>`,
+                    { cls: 'menu-sheet', onClose: () => resolve(v) });
+    const list = s.el.querySelector('.pop-list');
+    const render = q => { list.innerHTML = items.filter(it => it.sep || it.head || !q || String(it.label).toLowerCase().includes(q)).map(it => itemHtml(it, items)).join('') || '<div class="pop-empty">Нічого</div>'; };
+    render('');
+    s.el.addEventListener('click', e => { const b = e.target.closest('.pop-item'); if (b) { v = items[+b.dataset.i].value; s.close(); } });
+    const q = s.el.querySelector('.pop-q'); if (q) q.addEventListener('input', () => render(q.value.trim().toLowerCase()));
   });
 }
 export function closeMenu() { if (openMenu) { openMenu.off(); openMenu.box.remove(); openMenu = null; } }

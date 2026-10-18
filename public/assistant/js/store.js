@@ -1,7 +1,7 @@
-// Загальний стан застосунку: довідники (простори, статуси, проєкти) і лічильники для бічної панелі.
+// Загальний стан застосунку: довідники (простори, статуси, теги) і лічильники для бічної панелі.
 import { get } from './api.js';
 
-export const meta = { spaces: [], statuses: [], projects: [], counts: { spaces: {}, today: 0, inbox: 0, all: 0 }, icons: [] };
+export const meta = { spaces: [], statuses: [], tags: [], counts: { spaces: {}, today: 0, inbox: 0, all: 0 }, icons: [] };
 const subs = new Set();
 export const onMeta = f => { subs.add(f); return () => subs.delete(f); };
 

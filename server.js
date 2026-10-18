@@ -1,7 +1,8 @@
 // Сервер mdmy.me (by Maksymchuk Dmytro).
 //  • /                — головна сторінка;
 //  • /nakladna/       — видаткові накладні з LP-CRM у PDF;
-//  • /assistant/      — персональний асистент: голос і текст → задачі, нагадування, нотатки, Telegram-бот;
+//  • /assistant/      — персональний асистент: голос і текст → задачі, нагадування, нотатки, ритуали дня, Telegram-бот;
+//  • /m/<файл>        — фото й відео ритуалів (випадкові імена, без входу — їх забирають Telegram і сповіщення);
 //  • /api/*           — вхід (lib/auth.js) і API розділів; усе, крім входу, лише після входу.
 // Запуск: npm install && npm start, потім відкрити http://localhost:3001
 // Перший обліковий запис: npm run account -- create <логін> "<Ім'я>"
@@ -59,6 +60,7 @@ async function api(req, res, url) {
   if (url.startsWith('/api/nakladna/')) return nakladna.handle(req, res, url, a);
   if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);
   if (url.startsWith('/api/assistant/')) return assistant.handle(req, res, url, a, auth.log);
+  if (url === '/api/routines' || url.startsWith('/api/routines/')) return assistant.routines.handle(req, res, url);
   if (url.startsWith('/api/push/')) return push.handle(req, res, url, a);
   return send(res, 404, { error: 'Не знайдено.' });
 }
@@ -68,6 +70,7 @@ const server = http.createServer(async (req, res) => {
   try { url = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); return res.end(); }
   try {
     if (url.startsWith('/api/')) return await api(req, res, url);
+    if (url.startsWith('/m/')) return assistant.routines.serveMedia(req, res, url);
     return serveStatic(req, res, url);
   } catch (e) {
     console.error(e);

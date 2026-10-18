@@ -1,7 +1,7 @@
 // Бічна картка задачі (як сторінка в Notion): назва, властивості, підзадачі, опис. Усе зберігається одразу.
 import { get, patch, del, post } from '../api.js';
 import { icon, STATUS_ICON } from '../icons.js';
-import { $, esc, fmtDate, fmtDue, localInput, menu, confirmBox, toast, fail, autosize, debounce } from '../ui.js';
+import { $, esc, fmtDate, fmtDue, localInput, menu, confirmBox, toast, fail, autosize, debounce, isPhone, sheet, dragToClose } from '../ui.js';
 import { meta, space, status, openSpaces } from '../store.js';
 import { go, pageHref, taskHref } from '../nav.js';
 
@@ -19,6 +19,7 @@ export async function openTask(id) {
     w.querySelector('.panel-scrim').addEventListener('click', () => go(pageHref()));
     const pnl = w.querySelector('.panel');
     pnl.addEventListener('click', onClick); pnl.addEventListener('change', onChange); pnl.addEventListener('keydown', onPanelKey);
+    dragToClose(pnl, () => go(pageHref()), '.sheet-grab, .panel-top', true);   // телефон: картка — аркуш, тягни вниз, щоб закрити
     cur = { id, el: w, it: null };
     document.addEventListener('keydown', onKey, true);
   }
@@ -71,6 +72,7 @@ function render() {
   const kids = it.children || [], doneKids = kids.filter(k => k.done).length;
   const panel = cur.el.querySelector('.panel');
   panel.innerHTML = `
+    <div class="sheet-grab phone-only" aria-hidden="true"></div>
     <header class="panel-top">
       <div class="crumb">${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>${it.parent ? `<span class="sep">/</span><a href="${taskHref(it.parent.id)}">${esc(it.parent.text)}</a>` : ''}</div>
       <div class="panel-act">
@@ -90,13 +92,11 @@ function render() {
           <button type="button" class="pv${it.due_at ? '' : ' empty'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
           ${it.due_at && it.kind !== 'note' ? `<button type="button" class="pv-bell${it.kind === 'reminder' ? ' on' : ''}" data-p="kind" aria-pressed="${it.kind === 'reminder'}" title="${it.kind === 'reminder' ? 'Нагадаю в цей час — натисніть, щоб вимкнути' : 'Нагадати в цей час'}">${icon('bell', 15)}<span>${it.kind === 'reminder' ? 'Нагадаю' : 'Нагадати'}</span></button>` : ''}</div>
         ${propBtn('prio', 'flag', 'Пріоритет', it.priority ? `<span class="prio p${it.priority}">${icon('flag', 14)}${PRIO[it.priority].label}</span>` : '', 'Без пріоритету')}
-        <div class="prop-row"><span class="pk">${icon('folder')}<span>Проєкт</span></span>
-          <input class="pv-in" data-p="project" list="projList" value="${esc(it.project || '')}" placeholder="Порожньо"></div>
         <div class="prop-row"><span class="pk">${icon('tag')}<span>Теги</span></span>
-          <input class="pv-in" data-p="tags" value="${esc((it.tags || []).join(', '))}" placeholder="Порожньо"></div>
+          <div class="tagbox">${(it.tags || []).map(t => `<span class="tchip">#${esc(t)}<button type="button" data-a="tag-del" data-tag="${esc(t)}" aria-label="Прибрати тег">${icon('x', 12)}</button></span>`).join('')}<input class="tag-in" data-a="tag-add" list="tagList" placeholder="${(it.tags || []).length ? '' : 'Додати тег'}" enterkeyhint="done" autocapitalize="off" maxlength="30"></div></div>
         ${it.repeatText ? `<div class="prop-row"><span class="pk">${icon('repeat')}<span>Повтор</span></span><span class="pv static">${esc(it.repeatText)}</span></div>` : ''}
       </div>
-      <datalist id="projList">${meta.projects.map(p => `<option value="${esc(p.name)}">`).join('')}</datalist>
+      <datalist id="tagList">${meta.tags.map(t => `<option value="${esc(t.name)}">`).join('')}</datalist>
 
       ${it.parent ? '' : `<section class="p-sec">
         <h3>${icon('subtasks', 15)}Підзадачі${kids.length ? ` <span>${doneKids}/${kids.length}</span>` : ''}</h3>
@@ -166,19 +166,25 @@ async function onClick(e) {
   }
   if (a === 'sub-del' && row) { try { await del('assistant/items/' + row.dataset.id); openTask(it.id); changed(); } catch (err) { fail(err); } }
   if (a === 'sub-open' && row) go(taskHref(+row.dataset.id));
+  if (a === 'tag-del') save({ tags: (it.tags || []).filter(t => t !== b.dataset.tag) });
 }
 async function onChange(e) {
   const el = e.target; if (!cur) return;
-  if (el.dataset.p === 'project' && el.value.trim() !== (cur.it.project || '')) save({ project: el.value.trim() });
-  if (el.dataset.p === 'tags') save({ tags: el.value });
+  if (el.dataset.a === 'tag-add') addTag(el);
   if (el.dataset.a === 'sub-text') {
     const id = +el.closest('.sub').dataset.id;
     if (el.value.trim()) { try { await patch('assistant/items/' + id, { text: el.value.trim() }); changed(); } catch (err) { fail(err); } }
   }
 }
+function addTag(el) {
+  const t = el.value.trim().replace(/^#/, '').toLowerCase(); el.value = '';
+  if (t && cur && !(cur.it.tags || []).includes(t)) save({ tags: [...(cur.it.tags || []), t] }).then(() => { const i = cur && cur.el.querySelector('.tag-in'); if (i) i.focus(); });
+}
 async function onPanelKey(e) {
-  if (e.key !== 'Enter') return;
   const el = e.target;
+  if (el.dataset.a === 'tag-add' && (e.key === 'Enter' || e.key === ',')) { e.preventDefault(); return addTag(el); }
+  if (el.dataset.a === 'tag-add' && e.key === 'Backspace' && !el.value && cur && (cur.it.tags || []).length) return save({ tags: cur.it.tags.slice(0, -1) });
+  if (e.key !== 'Enter') return;
   if (el.dataset.a === 'sub-add' && el.value.trim()) {
     e.preventDefault();
     const text = el.value.trim(); el.value = '';
@@ -191,30 +197,40 @@ async function onPanelKey(e) {
 export function datePicker(anchor, ms) {
   return new Promise(resolve => {
     document.querySelectorAll('.pop').forEach(x => x.remove());
-    const box = document.createElement('div'); box.className = 'pop date-pop';
     const d0 = new Date(); d0.setSeconds(0, 0);
     const at = (days, h, m = 0) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(h, m, 0, 0); return localInput(d.getTime()); };
     const toMon = (8 - (d0.getDay() || 7)) % 7 || 7;
-    box.innerHTML = `
+    const inner = `
       <button type="button" class="pop-item" data-v="${at(0, Math.max(d0.getHours() + 1, 18) > 23 ? 23 : Math.max(18, d0.getHours() + 1))}">${icon('sun')}<span class="pop-l">Сьогодні</span></button>
       <button type="button" class="pop-item" data-v="${at(1, 9)}">${icon('arrowRight')}<span class="pop-l">Завтра</span><span class="pop-h">9:00</span></button>
       <button type="button" class="pop-item" data-v="${at(toMon, 9)}">${icon('calendar')}<span class="pop-l">Наступний понеділок</span><span class="pop-h">9:00</span></button>
       <div class="pop-sep"></div>
       <label class="date-in"><input type="datetime-local" value="${ms ? localInput(ms) : ''}"></label>
       <div class="date-act"><button type="button" class="btn sm" data-v="">Без строку</button><button type="button" class="btn primary sm" data-ok>Готово</button></div>`;
-    document.body.append(box);
-    const r = anchor.getBoundingClientRect(), bh = box.offsetHeight;
-    box.style.left = Math.max(8, Math.min(r.left, innerWidth - box.offsetWidth - 8)) + 'px';
-    box.style.top = (r.bottom + bh + 8 > innerHeight ? Math.max(8, r.top - bh - 4) : r.bottom + 4) + 'px';
+    let box, closeBox, result;
+    if (isPhone()) {
+      // телефон: нижній аркуш
+      const sh = sheet(`<div class="sheet-head"><b>Строк</b></div><div class="date-sheet">${inner}</div>`, { label: 'Строк', onClose: () => resolve(result) });
+      box = sh.el; closeBox = sh.close;
+    } else {
+      box = document.createElement('div'); box.className = 'pop date-pop'; box.innerHTML = inner;
+      document.body.append(box);
+      const r = anchor.getBoundingClientRect(), bh = box.offsetHeight;
+      box.style.left = Math.max(8, Math.min(r.left, innerWidth - box.offsetWidth - 8)) + 'px';
+      box.style.top = (r.bottom + bh + 8 > innerHeight ? Math.max(8, r.top - bh - 4) : r.bottom + 4) + 'px';
+      const away = e => { if (!box.contains(e.target) && !anchor.contains(e.target)) done(undefined); };
+      const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(undefined); } };
+      setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); });
+      closeBox = () => { box.remove(); document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', key, true); resolve(result); };
+    }
     const inp = box.querySelector('input');
-    const done = v => { box.remove(); document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', key, true); resolve(v); };
+    let finished = false;
+    function done(v) { if (finished) return; finished = true; result = v; closeBox(); }
     box.addEventListener('click', e => {
       const b = e.target.closest('[data-v], [data-ok]'); if (!b) return;
       if (b.hasAttribute('data-ok')) return done(inp.value || (ms ? '' : undefined));
       done(b.dataset.v);
     });
-    const away = e => { if (!box.contains(e.target) && !anchor.contains(e.target)) done(undefined); };
-    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(undefined); } if (e.key === 'Enter' && e.target === inp) { e.preventDefault(); done(inp.value || undefined); } };
-    setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); done(inp.value || undefined); } });
   });
 }

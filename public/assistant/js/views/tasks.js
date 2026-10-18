@@ -2,7 +2,8 @@
 // пошук, фільтри, сортування, групування, швидке додавання, вибір і масові дії, розбір «Вхідних» по одній.
 import { api, get, post } from '../api.js';
 import { icon, STATUS_ICON } from '../icons.js';
-import { $, $$, esc, pref, toast, fail, menu, confirmBox, debounce, fmtDue, dueBucket, BUCKETS, isTyping, spin } from '../ui.js';
+import { $, $$, esc, pref, toast, fail, menu, confirmBox, debounce, fmtDue, dueBucket, BUCKETS, isTyping, spin, wait } from '../ui.js';
+import { todayRituals } from './rituals.js';
 import { meta, space, status, openSpaces, firstStatus } from '../store.js';
 import { go, taskHref } from '../nav.js';
 import { datePicker } from './panel.js';
@@ -17,7 +18,7 @@ export function tasksPage(cfg) {
   const K = k => `tasks:${cfg.key}:${k}`;
   const st = {
     mode: pref.get(K('mode'), 'list'), sort: pref.get(K('sort'), 'smart'), group: pref.get(K('group'), cfg.group || 'date'),
-    view: cfg.view, q: '', project: '', prio: 0, showDone: false,
+    view: cfg.view, q: '', tag: '', prio: 0, showDone: false,
     items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0, collapsed: new Set(pref.get(K('collapsed'), []))
   };
   const fixedView = cfg.view !== 'open';
@@ -31,6 +32,7 @@ export function tasksPage(cfg) {
       <div class="page-head">
         <h1 class="page-title">${esc(cfg.title)}</h1>
       </div>
+      ${cfg.key === 'today' ? '<div class="rt-strip" hidden></div>' : ''}
       <div class="inbox-bar" hidden></div>
       <div class="vbar">
         <div class="vtabs" role="tablist">
@@ -41,7 +43,8 @@ export function tasksPage(cfg) {
           <label class="vsearch">${icon('search', 15)}<input type="search" placeholder="Пошук" aria-label="Пошук у задачах"></label>
           <button type="button" class="tbtn" data-t="filter" title="Фільтр">${icon('filter', 15)}<span>Фільтр</span></button>
           <button type="button" class="tbtn list-only" data-t="look" title="Сортування й групи">${icon('sort', 15)}<span>Вигляд</span></button>
-          <button type="button" class="tbtn" data-t="select" title="Вибрати кілька">${icon('check', 15)}<span>Вибрати</span></button>
+          <button type="button" class="tbtn phone-only" data-t="layout" title="Список / дошка">${icon(st.mode === 'board' ? 'list' : 'board', 18)}</button>
+          <button type="button" class="tbtn desk-only" data-t="select" title="Вибрати кілька (на телефоні — утримати задачу)">${icon('check', 15)}<span>Вибрати</span></button>
         </div>
       </div>
       <div class="fchips"></div>
@@ -51,12 +54,13 @@ export function tasksPage(cfg) {
     </div>`;
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onKeyIn);
+    longPress();
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
     document.addEventListener('keydown', onKey);
     syncBar(); load();
   }
-  function destroy() { document.removeEventListener('keydown', onKey); }
+  function destroy() { document.removeEventListener('keydown', onKey); document.body.classList.remove('bulk-on'); }
 
   function syncBar() {
     const page = $('.tasks-page', root); page.dataset.layout = st.mode;
@@ -64,20 +68,22 @@ export function tasksPage(cfg) {
     const chips = [];
     if (!fixedView && st.view !== 'open') chips.push(['view', 'Строк: ' + VIEWS.find(v => v[0] === st.view)[1]]);
     if (st.prio) chips.push(['prio', st.prio === 2 ? 'Лише термінові' : 'Важливі й термінові']);
-    if (st.project) chips.push(['project', 'Проєкт: ' + ((meta.projects.find(p => p.id === +st.project) || {}).name || '—')]);
+    if (st.tag) chips.push(['tag', '#' + st.tag]);
     if (st.showDone && st.mode === 'list') chips.push(['done', 'Виконані']);
     $('.fchips', root).innerHTML = chips.map(([k, l]) => `<button type="button" class="fchip" data-clear="${k}">${esc(l)}${icon('x', 12)}</button>`).join('');
     $('[data-t="filter"]', root).classList.toggle('on', chips.length > 0);
     $('[data-t="select"]', root).classList.toggle('on', st.selecting);
+    $('[data-t="layout"]', root).innerHTML = icon(st.mode === 'board' ? 'list' : 'board', 18);
   }
 
   // ---------- завантаження ----------
   function params(extra) {
     const p = new URLSearchParams({ area: cfg.area, view: st.showDone ? 'done' : st.view, sort: st.group === 'status' && st.sort === 'smart' ? 'smart' : st.sort, ...extra });
-    if (st.q) p.set('q', st.q); if (st.project) p.set('project', st.project); if (st.prio) p.set('prio', st.prio);
+    if (st.q) p.set('q', st.q); if (st.tag) p.set('tag', st.tag); if (st.prio) p.set('prio', st.prio);
     return p;
   }
   async function load(more) {
+    const strip = $('.rt-strip', root); if (strip && !more) todayRituals(strip);
     const my = ++st.loading, box = $('.tcontent', root);
     if (!more) box.classList.add('busy');
     try {
@@ -128,22 +134,25 @@ export function tasksPage(cfg) {
   };
   function drawList() {
     const box = $('.tcontent', root);
-    const add = `<div class="qadd">${icon('plus', 16)}<input class="qadd-in" placeholder="Нова задача — Enter, щоб додати" maxlength="2000">
+    const add = `<div class="qadd">${icon('plus', 16)}<input class="qadd-in" placeholder="Нова задача" maxlength="2000" enterkeyhint="done">
       <button type="button" class="icon-btn" data-t="ai-add" title="Через асистента: сам розбере дату, повтор, простір («завтра о 10 подзвонити…»)">${icon('sparkles')}</button></div>`;
     if (!st.items.length) {
       box.innerHTML = add + `<div class="empty">${icon(st.q ? 'search' : cfg.area === 'inbox' ? 'inbox' : 'checkCircle', 28)}<p>${
-        st.q || st.project || st.prio ? 'Нічого не знайдено.' : st.showDone ? 'Виконаних задач тут ще немає.' : cfg.area === 'inbox' ? 'У вхідних порожньо. Усе розкладено.' : 'Задач немає. Додайте першу або скажіть асистенту.'}</p></div>`;
+        st.q || st.tag || st.prio ? 'Нічого не знайдено.' : st.showDone ? 'Виконаних задач тут ще немає.' : cfg.area === 'inbox' ? 'У вхідних порожньо. Усе розкладено.' : 'Задач немає. Додайте першу або скажіть асистенту.'}</p></div>`;
     } else {
       const groups = new Map();
       for (const it of st.items) { const [k, l] = groupOf(it); if (!groups.has(k)) groups.set(k, { l, list: [] }); groups.get(k).list.push(it); }
       let keys = [...groups.keys()];
       const ord = typeof ORDER[st.group] === 'function' ? ORDER[st.group]() : ORDER[st.group];
       if (ord && !st.showDone && st.sort === 'smart') keys.sort((a, b) => ord.indexOf(a) - ord.indexOf(b));
+      let n = 0;
+      box.classList.toggle('stagger', !st.drawn); st.drawn = true;
+      const rowN = () => n < 14 ? n++ : 14;
       box.innerHTML = add + keys.map(k => {
         const g = groups.get(k), hid = st.collapsed.has(k);
         const head = g.l ? `<button type="button" class="grp-h${k === 'overdue' ? ' late' : ''}" data-grp="${esc(k)}">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}${
           st.group === 'space' && !st.showDone ? icon(space(k).icon, 14) : st.group === 'status' && !st.showDone ? icon(STATUS_ICON[k] || 'circle', 14) : ''}<span>${esc(g.l)}</span><b>${g.list.length}</b></button>` : '';
-        return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it) + it.children.map(c => rowHtml(c, true)).join('')).join('')}</div></section>`;
+        return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it, false, rowN()) + it.children.map(c => rowHtml(c, true, rowN())).join('')).join('')}</div></section>`;
       }).join('');
     }
     const more = $('.more', root), rest = st.total - st.items.length;
@@ -161,13 +170,13 @@ export function tasksPage(cfg) {
     if (it.status !== firstStatus() && !it.done) out.push(`<span class="prop st-${it.status}">${icon(STATUS_ICON[it.status] || 'circle', 13)}${esc(status(it.status).name)}</span>`);
     if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
     if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
-    if (it.project && !child) out.push(`<span class="prop">${icon('folder', 13)}${esc(it.project)}</span>`);
+    if (it.tags && it.tags.length && !child) out.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
     if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
     return out.join('');
   }
-  function rowHtml(it, child) {
+  function rowHtml(it, child, i = 0) {
     const kids = it.children || [], kd = kids.filter(k => k.done).length;
-    return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}">
+    return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" style="--i:${i}">
       <label class="row-sel"><input type="checkbox" data-a="sel" ${st.sel.has(it.id) ? 'checked' : ''} aria-label="Вибрати"></label>
       <button type="button" class="chk${it.done ? ' on' : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
       <a class="row-main" href="${taskHref(it.id)}" data-a="open">
@@ -186,7 +195,7 @@ export function tasksPage(cfg) {
     if (it.due_at) bits.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 12)}${esc(fmtDue(it.due_at))}</span>`);
     if (it.priority) bits.push(`<span class="prop prio p${it.priority}">${icon('flag', 12)}${it.priority === 2 ? 'Термінова' : 'Важлива'}</span>`);
     if (kids.length) bits.push(`<span class="prop">${icon('subtasks', 12)}${kd}/${kids.length}</span>`);
-    if (it.project) bits.push(`<span class="prop">${icon('folder', 12)}${esc(it.project)}</span>`);
+    if (it.tags && it.tags.length) bits.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
     if (cross) bits.push(`<span class="prop sp">${icon(space(it.area).icon, 12)}${esc(space(it.area).name)}</span>`);
     return `<div class="card${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" tabindex="0">
       <div class="card-title">${it.done ? icon('checkCircle', 14) : ''}${esc(it.text)}</div>
@@ -310,6 +319,19 @@ export function tasksPage(cfg) {
   }
 
   // ---------- вибір і масові дії ----------
+  // Телефон: утримати задачу — вибрати (далі — дотиками); без окремої кнопки «Вибрати»
+  let pressed = false;
+  function longPress() {
+    root.addEventListener('contextmenu', e => { if (e.target.closest('.row') && matchMedia('(hover: none)').matches) e.preventDefault(); });
+    root.addEventListener('pointerdown', e => {
+      const row = e.target.closest('.row'); if (!row || e.pointerType === 'mouse' || e.target.closest('.chk, [data-a="area"], [data-a="area-menu"]')) return;
+      const sx = e.clientX, sy = e.clientY;
+      const t = setTimeout(() => { pressed = true; setTimeout(() => { pressed = false; }, 700); toggleSel(+row.dataset.id, true); if (navigator.vibrate) navigator.vibrate(18); }, 450);
+      const off = () => { clearTimeout(t); removeEventListener('pointermove', mv); removeEventListener('pointerup', off); removeEventListener('pointercancel', off); };
+      const mv = ev => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) off(); };
+      addEventListener('pointermove', mv); addEventListener('pointerup', off); addEventListener('pointercancel', off);
+    });
+  }
   function toggleSel(id, on) {
     if (on === undefined) on = !st.sel.has(id);
     if (on) st.sel.add(id); else st.sel.delete(id);
@@ -326,6 +348,7 @@ export function tasksPage(cfg) {
     const b = $('.bulk', root);
     $('.tasks-page', root).classList.toggle('selecting', st.selecting);
     b.hidden = !st.selecting;
+    document.body.classList.toggle('bulk-on', st.selecting);
     if (b.hidden) return;
     const n = st.sel.size;
     b.innerHTML = `<b>${n ? `Вибрано: ${n}` : 'Позначте задачі'}</b>
@@ -442,7 +465,7 @@ export function tasksPage(cfg) {
     const t = e.target.closest('[data-t]'), a = e.target.closest('[data-a]'), m = e.target.closest('button[data-mode]');
     const clr = e.target.closest('[data-clear]'), grp = e.target.closest('[data-grp]'), bb = e.target.closest('[data-b]');
     if (m) { st.mode = m.dataset.mode; pref.set(K('mode'), st.mode); st.sel.clear(); load(); return; }
-    if (clr) { const k = clr.dataset.clear; if (k === 'view') st.view = cfg.view; if (k === 'prio') st.prio = 0; if (k === 'project') st.project = ''; if (k === 'done') st.showDone = false; load(); return; }
+    if (clr) { const k = clr.dataset.clear; if (k === 'view') st.view = cfg.view; if (k === 'prio') st.prio = 0; if (k === 'tag') st.tag = ''; if (k === 'done') st.showDone = false; load(); return; }
     if (grp) { const k = grp.dataset.grp; st.collapsed.has(k) ? st.collapsed.delete(k) : st.collapsed.add(k); pref.set(K('collapsed'), [...st.collapsed]); drawList(); return; }
     if (e.target.classList.contains('more')) return load(true);
     if (bb) {
@@ -460,6 +483,7 @@ export function tasksPage(cfg) {
     if (t) {
       const k = t.dataset.t;
       if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
+      if (k === 'layout') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); st.sel.clear(); load(); }
       if (k === 'triage') triage();
       if (k === 'suggest') suggest(t);
       if (k === 'accept') acceptAll();
@@ -472,17 +496,18 @@ export function tasksPage(cfg) {
       }
       if (k === 'filter') {
         const items = [];
-        if (!fixedView) items.push(...VIEWS.map(([v, l]) => ({ value: 'view:' + v, label: l, icon: 'calendar', checked: st.view === v })), { sep: true });
-        items.push({ value: 'prio:0', label: 'Будь-який пріоритет', icon: 'circle', checked: !st.prio }, { value: 'prio:1', label: 'Важливі й термінові', icon: 'flag', checked: st.prio === 1 },
+        if (!fixedView) items.push({ head: 'Строк' }, ...VIEWS.map(([v, l]) => ({ value: 'view:' + v, label: l, icon: 'calendar', checked: st.view === v })));
+        items.push({ head: 'Пріоритет' }, { value: 'prio:0', label: 'Будь-який пріоритет', icon: 'circle', checked: !st.prio }, { value: 'prio:1', label: 'Важливі й термінові', icon: 'flag', checked: st.prio === 1 },
                    { value: 'prio:2', label: 'Лише термінові', icon: 'flag', checked: st.prio === 2 });
-        if (meta.projects.length) items.push({ sep: true }, { value: 'project:', label: 'Усі проєкти', icon: 'folder', checked: !st.project },
-          ...meta.projects.map(p => ({ value: 'project:' + p.id, label: p.name, icon: 'folder', checked: String(st.project) === String(p.id), hint: p.open ? String(p.open) : '' })));
-        if (st.mode === 'list') items.push({ sep: true }, { value: 'done', label: st.showDone ? 'Сховати виконані' : 'Показати виконані', icon: 'checkCircle', checked: st.showDone });
+        const tags = meta.tags.filter(t => t.open || t.name === st.tag);
+        if (tags.length) items.push({ head: 'Теги' }, { value: 'tag:', label: 'Будь-який тег', icon: 'tag', checked: !st.tag },
+          ...tags.slice(0, 30).map(t => ({ value: 'tag:' + t.name, label: '#' + t.name, icon: 'tag', checked: st.tag === t.name, hint: t.open ? String(t.open) : '' })));
+        if (st.mode === 'list') items.push({ head: 'Виконані' }, { value: 'done', label: st.showDone ? 'Сховати виконані' : 'Показати виконані', icon: 'checkCircle', checked: st.showDone });
         const v = await menu(t, items, { width: 240 });
         if (!v) return;
         if (v.startsWith('view:')) st.view = v.slice(5);
         else if (v.startsWith('prio:')) st.prio = +v.slice(5);
-        else if (v.startsWith('project:')) st.project = v.slice(8);
+        else if (v.startsWith('tag:')) st.tag = v.slice(4);
         else if (v === 'done') st.showDone = !st.showDone;
         load();
       }
@@ -491,19 +516,23 @@ export function tasksPage(cfg) {
     if (!a) return;
     const row = a.closest('[data-id]'), id = row && +row.dataset.id, act = a.dataset.a;
     if (act === 'open') {
+      if (pressed) { e.preventDefault(); pressed = false; return; }
       if (st.selecting) { e.preventDefault(); toggleSel(id); }
       return;   // інакше — звичайне посилання на задачу
     }
     if (act === 'sel') { toggleSel(id, a.checked); return; }
     if (act === 'done') {
       const it = findItem(id); if (!it) return;
-      a.classList.toggle('on');
+      a.classList.toggle('on'); a.classList.add('pop');
+      if (!it.done) { row.classList.add('completing'); if (navigator.vibrate) navigator.vibrate(12); }
       try {
-        const r = await post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`);
+        // анімація (галочка → закреслення → рядок згортається) іде паралельно із запитом
+        const [r] = await Promise.all([post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`), wait(it.done ? 0 : 420)]);
         if (r.next) toast('Наступний раз: ' + fmtDue(r.next));
         else if (!it.done) toast('Виконано', async () => { await post(`assistant/items/${id}/reopen`); changed(); });
+        if (!it.done && !r.next) { row.style.height = row.offsetHeight + 'px'; row.classList.add('collapse'); await wait(220); }
         changed();
-      } catch (err) { fail(err); a.classList.toggle('on'); }
+      } catch (err) { fail(err); a.classList.toggle('on'); row.classList.remove('completing'); }
       return;
     }
     if (act === 'area' || act === 'area-menu') {

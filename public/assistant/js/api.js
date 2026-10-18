@@ -19,6 +19,7 @@ export async function api(path, opts = {}) {
   if (!r.ok) throw Object.assign(new Error((data && data.error) || `Помилка ${r.status}`), { status: r.status, data });
   return data;
 }
+export const authHeaders = () => ({ 'X-MDMY': '1', ...(token ? { Authorization: 'Bearer ' + token } : {}) });
 export const get = path => api(path);
 export const post = (path, json) => api(path, { method: 'POST', json: json || {} });
 export const patch = (path, json) => api(path, { method: 'PATCH', json });

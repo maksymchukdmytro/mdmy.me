@@ -29,7 +29,7 @@
   "priority": 0 | 1 | 2,     // звичайна / важлива / термінова
   "due_at": 1792306800000,   // мс UTC або null; "when" — те саме текстом
   "repeat": {"freq": "weekly", "interval": 1, "days": [1]} | null, "repeatText": "щопонеділка",
-  "project": "Магазин", "project_id": 2, "tags": ["клієнт"],
+  "tags": ["клієнт"],          // теги (проєктів окремо немає)
   "parent_id": null, "children": [ …підзадачі… ],
   "done": false, "done_at": null, "overdue": false, "sent": false, "created": 1792270040867
 }
@@ -46,10 +46,10 @@
 
 | Метод і шлях | Що робить |
 |---|---|
-| `GET meta` | Довідники й лічильники для навігації: `spaces`, `statuses`, `projects`, `icons`, `counts {spaces, today, inbox, all, views}` |
-| `GET tasks?area&view&status&q&project&prio&sort&offset&limit` | Список верхньорівневих задач з підзадачами (`children`), `total`, `counts`. `area`: ключ простору або `all`; `view`: `open` · `today` · `overdue` · `week` · `nodate` · `done` · `any`; `sort`: `smart` · `prio` · `created` · `alpha` · `manual`; `limit` до 200 |
-| `GET board?area&view&q&project&prio` | Канбан: `columns[] = {status, name, done, total, items[]}`; «готово» — за останні 14 днів |
-| `POST items` | Створити: `{text, area?, status?, due?, priority?, project?, tags?, description?, parent_id?, kind?, after?, before?}`. `due` — місцевий час `YYYY-MM-DDTHH:MM` |
+| `GET meta` | Довідники й лічильники для навігації: `spaces`, `statuses`, `tags [{name, open}]`, `icons`, `counts {spaces, today, inbox, all, views}` |
+| `GET tasks?area&view&status&q&tag&prio&sort&offset&limit` | Список верхньорівневих задач з підзадачами (`children`), `total`, `counts`. `area`: ключ простору або `all`; `view`: `open` · `today` · `overdue` · `week` · `nodate` · `done` · `any`; `sort`: `smart` · `prio` · `created` · `alpha` · `manual`; `limit` до 200 |
+| `GET board?area&view&q&tag&prio` | Канбан: `columns[] = {status, name, done, total, items[]}`; «готово» — за останні 14 днів |
+| `POST items` | Створити: `{text, area?, status?, due?, priority?, tags?, description?, parent_id?, kind?, after?, before?}`. `due` — місцевий час `YYYY-MM-DDTHH:MM` |
 | `GET items/:id` | Задача з підзадачами й батьком |
 | `PATCH items/:id` | Змінити будь-які з полів вище; `due: ""` — прибрати строк |
 | `DELETE items/:id` | Видалити разом із підзадачами |
@@ -63,11 +63,40 @@
 | `GET search?q` | Пошук по всьому, що сказано асистенту, і по записах |
 | `POST message {text}` | Повідомлення асистенту (як у Telegram): `{reply, done[], items[], msgId, undoable}` |
 | `POST undo {msgId}` | Скасувати дії повідомлення |
-| `GET state?days` | Щоденник стану й звички |
 | `GET settings`, `POST settings` | Налаштування асистента (ключ Claude і токен бота назад не віддаються) |
 | `POST plan`, `POST summary` | Ранковий план / підсумок дня (і надіслати в Telegram) |
 
 Голос: `POST /api/stt/transcribe?lang=uk|ru|en|auto`, тіло — сирі байти аудіо (webm/ogg/m4a/wav, до 20 МБ) → `{text, duration, …}`; `GET /api/stt/health`.
+
+## Ритуали дня (`/api/routines/…`)
+
+Коротка повторювана справа з фото / відео / анімацією й кроками з таймером, що приходить сповіщенням за розкладом.
+
+```json
+{
+  "id": 2, "title": "Склянка води", "icon": "💧", "body": "Випий склянку води",
+  "steps": [{"text": "Потягнись", "sec": 30}],
+  "media": [{"type": "image", "url": "/m/<32 hex>.jpg"}, {"type": "youtube", "url": "https://youtu.be/…"}, {"type": "eyes"}],
+  "times": ["09:00", "13:00"],            // або every (хв) + from + to
+  "every": null, "from": null, "to": null,
+  "days": [1, 2, 3, 4, 5] | null,         // пн=1 … нд=7; null — щодня
+  "active": true, "schedule": "пн–пт · 09:00, 13:00",
+  "today": [{"slot": "09:00", "status": "done | sent | skip | missed | planned"}],
+  "done": 1, "total": 2, "next": "13:00", "pending": "09:00" | null
+}
+```
+
+Типи медіа: `image`, `video` (лише завантажені), `youtube`, `link`, вбудовані анімації `eyes`, `water`, `breath`.
+
+| Метод і шлях | Що робить |
+|---|---|
+| `GET /api/routines` | `{list, templates}` |
+| `POST /api/routines` | Створити: поля вище або `{template: "morning · eyes · water · back · breath"}` |
+| `GET / PATCH / DELETE /api/routines/:id` | Прочитати / змінити будь-які поля / видалити |
+| `POST /api/routines/:id/done · skip · later` | Відмітити поточний раз; `later` — нагадати ще раз через 15 хв |
+| `POST /api/routines/:id/send` | Надіслати зараз (перевірка) |
+| `POST /api/routines/media` | Сирі байти файлу з `Content-Type` (JPEG, PNG, WebP, GIF, MP4, WebM, MOV; до 60 МБ) → `{url, type}` |
+| `GET /m/<імʼя>` | Сам файл (без входу, з Range) |
 
 ## Push-сповіщення (Web Push)
 
@@ -80,7 +109,7 @@
 | `POST /api/push/test` | Тестове сповіщення на всі пристрої |
 | `POST /api/push/action {token, action: done · snooze}` | Кнопки в сповіщенні; без сесії — `token` підписаний сервером і діє для однієї задачі 3 доби |
 
-Що приходить у push (JSON): `{kind: "reminder" · "text", title, body, url, tag, id?, token?, actions?}`.
+Що приходить у push (JSON): `{kind: "reminder" · "routine" · "text", title, body, url, tag, id?, token?, actions?, image?}`. Для ритуалу дії — `rdone` / `rlater`, токен — на `r<id>`.
 Надсилаються нагадування (одночасно з Telegram, якщо його привʼязано), ранковий план і підсумок дня. Майбутній Android-застосунок
 може отримувати ті самі події через FCM.
 

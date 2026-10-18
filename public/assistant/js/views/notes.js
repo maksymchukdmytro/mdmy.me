@@ -44,7 +44,7 @@ export function notesPage() {
           <footer>${icon(n.type === 'msg' ? 'mic' : n.kind === 'note' ? 'note' : 'checkCircle', 13)}<span>${esc(n.when || '')} · ${kind}</span>${(n.tags || []).map(t => `<button type="button" class="tagp" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</footer></article>`;
       }
       return `<article class="note"><p>${esc(n.text)}</p>
-        <footer>${icon('clock', 13)}<span title="${esc(fmtDate(n.created))}">${esc(fmtDue(n.created, false))}</span>${n.project ? `<span>· ${esc(n.project)}</span>` : ''}
+        <footer>${icon('clock', 13)}<span title="${esc(fmtDate(n.created))}">${esc(fmtDue(n.created, false))}</span>
           ${n.tags.map(t => `<button type="button" class="tagp" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}
           <button type="button" class="icon-btn xs note-del" data-del="${n.id}" title="Видалити">${icon('trash', 14)}</button></footer></article>`;
     }).join('');

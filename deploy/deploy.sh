@@ -130,7 +130,7 @@ server {
     listen 80;
     $LISTEN6
     server_name $NAMES;
-    client_max_body_size 3m;     # голосові записи для розшифровки (≈10 хв)
+    client_max_body_size 64m;    # голосові записи й відео ритуалів (до 60 МБ)
     location / {
         proxy_pass http://127.0.0.1:$PORT;
         proxy_http_version 1.1;
@@ -161,6 +161,11 @@ EOF
   fi
 else
   HTTPS_OK=0; [ -d "/etc/letsencrypt/live/$DOMAIN" ] && HTTPS_OK=1
+  # старі налаштування nginx (до ритуалів) пропускали лише 3 МБ — відео не завантажилось би
+  if grep -q 'client_max_body_size 3m;' /etc/nginx/sites-available/mdmy 2>/dev/null; then
+    sed -i 's/client_max_body_size 3m;.*/client_max_body_size 64m;    # голосові записи й відео ритуалів (до 60 МБ)/' /etc/nginx/sites-available/mdmy
+    nginx -t && systemctl reload nginx || warn "nginx не прийняв новий ліміт розміру — відео до 3 МБ"
+  fi
 fi
 
 say "7/7 Щоденна резервна копія бази"

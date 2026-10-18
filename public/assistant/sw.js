@@ -1,4 +1,4 @@
-// Сервіс-воркер mdmy: push-сповіщення (нагадування, ранковий план, підсумок дня) і кнопки в них.
+// Сервіс-воркер mdmy: push-сповіщення (нагадування, ритуали дня, ранковий план, підсумок дня) і кнопки в них.
 // Нічого не кешує — інтерфейс завжди свіжий із сервера.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
@@ -10,10 +10,11 @@ self.addEventListener('push', e => {
     body: d.body || '',
     tag: d.tag || undefined,
     renotify: !!d.tag,
-    requireInteraction: d.kind === 'reminder',      // нагадування висить, доки не відреагуєш
+    requireInteraction: d.kind === 'reminder' || d.kind === 'routine',      // висить, доки не відреагуєш
+    image: d.image || undefined,                    // ритуал: фото вправи великим планом (Android)
     icon: '/assistant/icon-192.png',
     badge: '/assistant/badge-96.png',
-    vibrate: d.kind === 'reminder' ? [200, 100, 200, 100, 400] : [120],
+    vibrate: d.kind === 'reminder' ? [200, 100, 200, 100, 400] : d.kind === 'routine' ? [120, 80, 120] : [120],
     timestamp: Date.now(),
     actions: (d.actions || []).slice(0, 2),
     data: { url: d.url || '/assistant/#/today', token: d.token || null, id: d.id || null }

@@ -1,5 +1,5 @@
 // Маршрути застосунку (#/…). Окремий модуль, щоб сторінки могли переходити без циклічних імпортів.
-// #/today  #/upcoming  #/all  #/s/<простір>  #/notes  #/state  #/record  #/settings[/розділ]  …/t/<id> — відкрита задача
+// #/today  #/upcoming  #/all  #/s/<простір>  #/notes  #/rituals[/<id>]  #/record  #/settings[/розділ]  …/t/<id> — відкрита задача, #/r/<id> — виконати ритуал
 export function parse() {
   const h = location.hash.replace(/^#\/?/, '');
   if (/tgWebAppData=/.test(h)) return { key: 'today', parts: ['today'], task: null };
