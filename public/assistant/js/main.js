@@ -89,7 +89,7 @@ function shell() {
       <a href="#/today" data-r="today">${icon('sun', 20)}<span>Сьогодні</span></a>
       <a href="#/s/inbox" data-r="s/inbox">${icon('inbox', 20)}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
       <button type="button" data-r="record" class="tab-mic" aria-label="Запис голосом: натисніть — відкрити, утримуйте — говорити">${icon('mic', 22)}</button>
-      <a href="#/rituals" data-r="rituals">${icon('ritual', 20)}<span>Ритуали</span></a>
+      <a href="#/all" data-r="all">${icon('layers', 20)}<span>Усі задачі</span></a>
       <button type="button" data-act="side-open">${icon('menu', 20)}<span>Меню</span></button>
     </nav>
   </div>`;
@@ -149,7 +149,7 @@ async function onShellClick(e) {
 }
 
 // ---------- меню телефона: легкий нижній аркуш ----------
-// Сьогодні, Вхідні й Ритуали — на нижній панелі, тут лише решта: пошук, простори, інші розділи.
+// Сьогодні, Вхідні й Усі задачі — на нижній панелі, тут лише решта: пошук, простори, ритуали, інші розділи.
 function phoneMenu() {
   const c = meta.counts || {}, cur = currentKey;
   const item = (href, ic, label, n, key) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
@@ -160,7 +160,7 @@ function phoneMenu() {
       <a class="m-item add" href="#/settings/spaces">${icon('plus', 20)}<span>Новий простір</span></a>
       <p class="m-label">Ще</p>
       ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
-      ${item('#/all', 'layers', 'Усі задачі', c.all, 'all')}
+      ${item('#/rituals', 'ritual', 'Ритуали', 0, 'rituals')}
       ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
       ${item('#/record', 'mic', 'Запис голосом', 0, 'record')}
       ${item('#/settings', 'settings', 'Налаштування', 0, 'settings')}
