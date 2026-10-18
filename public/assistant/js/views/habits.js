@@ -1,14 +1,42 @@
 // Формування звичок (вкладка «Звички» розділу «Щоденні завдання»).
-// #/habits — список: серія, останні 7 днів, кнопка «сьогодні»; #/habits/<id> — звичка: календар ✓/✗, серії, налаштування;
+// #/habits — список: серія, тиждень звички (перший кружечок — перший день), кнопка «сьогодні»; #/habits/<id> — звичка: календар ✓/✗, серії, налаштування;
 // #/habits/check — вечірня відмітка (з неї відкривається сповіщення): «Так / Ні» під кожною звичкою.
 // Сервер — lib/habits.js, API /api/habits/*.
 import { get, post, patch, del } from '../api.js';
 import { icon } from '../icons.js';
-import { $, $$, esc, toast, fail, confirmBox, debounce, sheet, menu, pref } from '../ui.js';
+import { $, $$, esc, toast, fail, confirmBox, debounce, sheet, pref } from '../ui.js';
 import { go } from '../nav.js';
 import { dailyTabs } from './rituals.js';
 
-const EMOJI = ['🤸', '🏃', '🧘', '📖', '💧', '🥗', '🍬', '🚭', '😴', '🦷', '🧠', '✍️', '🎸', '🇬🇧', '💪', '✨'];
+// 5 стандартних значків + шоста плитка — будь-яке своє емоджі з клавіатури
+const EMOJI = ['💪', '📖', '💧', '🧘', '😴'];
+const isEmoji = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+const lastEmoji = v => {
+  const parts = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter('uk', { granularity: 'grapheme' }).segment(v)].map(x => x.segment) : [...v];
+  return parts.reverse().find(g => isEmoji.test(g)) || '';
+};
+function iconRow(cur) {
+  const own = cur && !EMOJI.includes(cur) ? cur : '';
+  return `<div class="h-emojis">${EMOJI.map(x => `<button type="button" class="h-emo${x === cur ? ' on' : ''}" data-emo="${x}" aria-label="${x}">${x}</button>`).join('')}
+    <label class="h-emo own${own ? ' on' : ''}" title="Своє емоджі"><input class="h-own" value="${esc(own)}" placeholder=" " aria-label="Своє емоджі" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"><span class="h-own-ph">${icon('plus', 18)}<small>своє</small></span></label></div>
+    <p class="h-own-hint" hidden>Виберіть будь-яке емоджі на клавіатурі${navigator.platform && /Win/.test(navigator.platform) ? ' (Win + .)' : /Mac/.test(navigator.platform || '') ? ' (Ctrl + Cmd + Пробіл)' : ''}</p>`;
+}
+// onPick(emoji) — щоразу, коли вибрано значок
+function bindIconRow(box, onPick) {
+  const own = $('.h-own', box), hint = $('.h-own-hint', box);
+  const set = (el, v) => { $$('.h-emo', box).forEach(x => x.classList.toggle('on', x === el)); onPick(v); };
+  box.addEventListener('click', e => { const b = e.target.closest('[data-emo]'); if (b) { own.value = ''; set(b, b.dataset.emo); } });
+  own.addEventListener('focus', () => { hint.hidden = false; });
+  own.addEventListener('blur', () => { hint.hidden = true; });
+  own.addEventListener('input', () => {
+    const v = lastEmoji(own.value); own.value = v;
+    if (v) { set(own.closest('.h-emo'), v); own.blur(); }
+  });
+  own.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); own.blur(); } });
+}
+const daysRow = days => `<div class="r-days">${DAYS.map((d, i) => `<button type="button" class="day${!days || days.includes(i + 1) ? ' on' : ''}" data-wd="${i + 1}">${d}</button>`).join('')}</div>`;
+const remindRow = (on, time) => `<div class="h-rem-row"><label class="switch"><input type="checkbox" class="h-rem-on" ${on ? 'checked' : ''}><span>${icon('bell', 15)}Нагадувати о</span></label>
+  <input type="time" class="h-rem" value="${esc(time || '09:00')}" aria-label="Час нагадування" ${on ? '' : 'disabled'}></div>`;
 const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 const MONTHS = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
 const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
@@ -42,8 +70,8 @@ function listPage() {
         <a class="h-main" href="#/habits/${h.id}">
           <span class="r-emoji">${esc(h.icon)}</span>
           <span class="h-txt"><b>${esc(h.title)}</b>
-            <small>${h.streak ? `🔥 ${h.streak} ${dn(h.streak, 'день', 'дні', 'днів')} поспіль` : h.best ? `Найкраща серія — ${h.best}` : 'Починаємо'}</small>
-            <span class="h-week">${h.week.map(d => `<i class="${!d.planned ? 'np' : d.mark === 1 ? 'ok' : d.mark === 0 ? 'no' : ''}" title="${d.day}">${d.planned && d.mark != null ? MARK[d.mark] : ''}</i>`).join('')}</span>
+            <small>${h.streak ? `🔥 ${h.streak} ${dn(h.streak, 'день', 'дні', 'днів')} поспіль` : h.best ? `Найкраща серія — ${h.best}` : h.dayNo > 1 ? `День ${h.dayNo}` : 'Перший день'}${h.remind ? `<span class="h-rt">${icon('bell', 12)}${esc(h.remind)}</span>` : ''}</small>
+            <span class="h-week">${h.week.map(d => `<i class="${[!d.planned && !d.future ? 'np' : '', d.mark === 1 ? 'ok' : d.mark === 0 ? 'no' : '', d.future ? 'fut' : '', d.today ? 'td' : ''].filter(Boolean).join(' ')}" title="${d.day}">${d.mark != null ? MARK[d.mark] : ''}</i>`).join('')}</span>
           </span>
         </a>
         ${h.todayPlanned ? `<button type="button" class="h-today ${h.today === 1 ? 'ok' : h.today === 0 ? 'no' : ''}" data-today="${h.id}" aria-label="Сьогодні: ${h.today === 1 ? 'виконано' : h.today === 0 ? 'не виконано' : 'не відмічено'}">${h.today === 0 ? icon('x', 20) : icon('check', 22)}</button>` : '<span class="h-rest">вихідний</span>'}
@@ -74,18 +102,34 @@ function listPage() {
   return { render, refresh: load };
 }
 
+// Нова звичка: значок, назва, дні тижня, нагадування в певний час (у вибрані дні)
 function newHabit() {
   const s = sheet(`<div class="sheet-head"><b>Нова звичка</b></div>
     <form class="h-new">
-      <div class="h-emojis">${EMOJI.map((x, i) => `<button type="button" class="h-emo${i === 0 ? ' on' : ''}" data-emo="${x}">${x}</button>`).join('')}</div>
-      <input name="title" placeholder="Наприклад: зарядка зранку" maxlength="80" autocomplete="off" required>
+      ${iconRow(EMOJI[0])}
+      <input name="title" class="h-title-in" placeholder="Наприклад: зарядка зранку" maxlength="80" autocomplete="off" required enterkeyhint="done">
+      <div class="h-field"><span class="h-lbl">Дні</span>${daysRow(null)}</div>
+      <div class="h-field">${remindRow(true, '09:00')}</div>
       <button class="btn primary" type="submit">Створити</button></form>`, { label: 'Нова звичка' });
   let emo = EMOJI[0];
-  const inp = $('input', s.el); setTimeout(() => inp.focus(), 280);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-emo]'); if (b) { emo = b.dataset.emo; $$('.h-emo', s.el).forEach(x => x.classList.toggle('on', x === b)); } });
+  const inp = $('.h-title-in', s.el); setTimeout(() => inp.focus(), 280);
+  bindIconRow($('form', s.el), v => { emo = v; });
+  const remOn = $('.h-rem-on', s.el), rem = $('.h-rem', s.el);
+  remOn.addEventListener('change', () => { rem.disabled = !remOn.checked; });
+  s.el.addEventListener('click', e => {
+    const d = e.target.closest('[data-wd]'); if (!d) return;
+    if (d.classList.contains('on') && $$('.r-days .day.on', s.el).length === 1) return toast('Хоча б один день');
+    d.classList.toggle('on');
+  });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
   $('form', s.el).addEventListener('submit', async e => {
     e.preventDefault();
-    try { const h = await post('habits', { title: inp.value, icon: emo }); s.close(); changed(); go('#/habits/' + h.id); } catch (err) { fail(err); }
+    if (!inp.value.trim()) return inp.focus();
+    const btn = $('button[type=submit]', s.el); btn.disabled = true;
+    try {
+      const h = await post('habits', { title: inp.value, icon: emo, days: $$('.r-days .day.on', s.el).map(b => +b.dataset.wd), remind: remOn.checked ? rem.value || '09:00' : null });
+      s.close(); changed(); go('#/habits/' + h.id);
+    } catch (err) { fail(err); btn.disabled = false; }
   });
 }
 
@@ -97,6 +141,11 @@ function habitPage(id) {
     root = el;
     root.innerHTML = `<div class="page h-page"><a class="back" href="#/habits">${icon('chevronLeft', 18)}Звички</a><div class="h-body"><span class="spin"></span></div></div>`;
     root.addEventListener('click', onClick);
+    root.addEventListener('change', e => {
+      if (!e.target.matches('.h-rem-on, .h-rem')) return;
+      const on = $('.h-rem-on', root).checked, tm = $('.h-rem', root);
+      tm.disabled = !on; save({ remind: on ? tm.value || '09:00' : null }).then(() => toast(on ? `Нагадаю о ${tm.value || '09:00'}` : 'Нагадування вимкнено'));
+    });
     root.addEventListener('input', e => { if (e.target.dataset.f) { if (e.target.matches('textarea')) grow(e.target); saveSoon({ [e.target.dataset.f]: e.target.value }); } });
     await load();
   }
@@ -130,9 +179,8 @@ function habitPage(id) {
         }).join('')}</div>
         <p class="h-legend"><span><i class="ok">${MARK[1]}</i>виконав</span><span><i class="no">${MARK[0]}</i>не виконав</span><span class="muted">торкнись дня, щоб змінити</span></p>
       </section>
-      <section class="r-sec"><h3>Дні</h3>
-        <div class="r-days">${DAYS.map((d, i) => `<button type="button" class="day${!h.days || h.days.includes(i + 1) ? ' on' : ''}" data-wd="${i + 1}">${d}</button>`).join('')}</div>
-      </section>
+      <section class="r-sec"><h3>Дні</h3>${daysRow(h.days)}</section>
+      <section class="r-sec"><h3>Нагадування</h3>${remindRow(!!h.remind, h.remind)}</section>
       <section class="r-sec r-foot">
         <label class="switch big"><input type="checkbox" data-a="ask" ${h.ask ? 'checked' : ''}><span>Питати щовечора</span></label>
         <div class="r-acts"><button type="button" class="btn ghost danger" data-a="delete">${icon('trash', 15)}Видалити звичку</button></div>
@@ -161,7 +209,10 @@ function habitPage(id) {
     }
     const a = t.dataset.a;
     if (a === 'ask') return save({ ask: t.checked });
-    if (a === 'emoji') { const v = await menu(t, EMOJI.map(x => ({ value: x, label: x, checked: x === h.icon })), { title: 'Значок' }); if (v) { t.textContent = v; save({ icon: v }); } }
+    if (a === 'emoji') {
+      const sh = sheet(`<div class="sheet-head"><b>Значок</b></div><div class="h-new">${iconRow(h.icon)}</div>`, { label: 'Значок' });
+      bindIconRow(sh.el, v => { t.textContent = v; h.icon = v; save({ icon: v }); setTimeout(() => sh.close(), 160); });
+    }
     if (a === 'delete' && await confirmBox(`Видалити звичку «${h.title}» разом з історією?`)) {
       try { await del('habits/' + id); changed(); toast('Видалено'); go('#/habits'); } catch (err) { fail(err); }
     }

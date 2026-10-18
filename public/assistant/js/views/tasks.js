@@ -62,12 +62,12 @@ export function tasksPage(cfg) {
       <div class="tcontent"></div>
       <button type="button" class="btn more" hidden></button>
       <div class="bulk" hidden></div>
-      <button type="button" class="fab phone-only" data-t="compose" aria-label="Нова задача">${icon('plus', 26)}</button>
+      <button type="button" class="fab" data-t="compose" aria-label="Нова задача" title="Нова задача (N)">${icon('plus', 26)}</button>
     </div>`;
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onKeyIn);
     longPress(); swipe();
-    offMeta = onMeta(() => drawDay());
+    offMeta = onMeta(() => { drawDay(); drawInbox(); });
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
     document.addEventListener('keydown', onKey);
@@ -152,8 +152,16 @@ export function tasksPage(cfg) {
   // ---------- «Вхідні» ----------
   function drawInbox() {
     const bar = $('.inbox-bar', root), n = (meta.counts || {}).inbox || 0;
-    bar.hidden = !(cfg.area === 'inbox' && n > 0 && !st.showDone);
-    if (bar.hidden) return;
+    const show = cfg.area === 'inbox' && n > 0 && !st.showDone;
+    if (!show) {
+      // усе розкладено — смужка плавно згортається, а не зникає ривком
+      if (!bar.hidden && cfg.area === 'inbox' && !st.showDone && !bar.classList.contains('bye')) {
+        bar.style.height = bar.offsetHeight + 'px'; bar.offsetHeight; bar.classList.add('bye');
+        setTimeout(() => { bar.hidden = true; bar.classList.remove('bye'); bar.style.height = ''; }, 420);
+      } else if (!bar.classList.contains('bye')) bar.hidden = true;
+      return;
+    }
+    bar.hidden = false; bar.classList.remove('bye'); bar.style.height = '';
     bar.innerHTML = `<span>Асистент не зміг розкласти <b>${n}</b> ${n === 1 ? 'задачу' : n < 5 ? 'задачі' : 'задач'}</span>
       <button type="button" class="btn primary sm" data-t="triage">Розкласти по одній</button>
       <button type="button" class="btn sm" data-t="suggest">${icon('sparkles', 14)}Підказати</button>
@@ -185,7 +193,9 @@ export function tasksPage(cfg) {
     const add = `<div class="qadd">${icon('plus', 16)}<input class="qadd-in" placeholder="Нова задача" maxlength="2000" enterkeyhint="done">
       <button type="button" class="icon-btn" data-t="ai-add" title="Через асистента: сам розбере дату, повтор, простір («завтра о 10 подзвонити…»)">${icon('sparkles')}</button></div>`;
     if (!st.items.length) {
-      box.innerHTML = add + `<div class="empty">${icon(st.q ? 'search' : cfg.area === 'inbox' ? 'inbox' : 'checkCircle', 28)}<p>${
+      if (cfg.area === 'inbox' && !st.q && !st.tag && !st.prio && !st.showDone)
+        box.innerHTML = add + `<div class="empty zero"><svg class="zero-ic" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28"/><path d="M20 33.5l8.5 8.5L45 24.5"/></svg><b>Вхідні порожні</b><p>Усе розкладено по просторах</p></div>`;
+      else box.innerHTML = add + `<div class="empty">${icon(st.q ? 'search' : cfg.area === 'inbox' ? 'inbox' : 'checkCircle', 28)}<p>${
         st.q || st.tag || st.prio ? 'Нічого не знайдено.' : st.showDone ? 'Виконаних задач тут ще немає.' : cfg.area === 'inbox' ? 'У вхідних порожньо. Усе розкладено.' : 'Задач немає. Додайте першу або скажіть асистенту.'}</p></div>`;
     } else {
       const groups = new Map();
@@ -493,9 +503,9 @@ export function tasksPage(cfg) {
     document.body.append(w);
     const show = () => {
       const it = list[i];
-      if (!it) { close(); toast(`Готово! Розкладено: ${hist.filter(h => h.a !== 'skip').length}`); return; }
+      if (!it) return finale();
       const sug = st.sug.get(it.id);
-      w.innerHTML = `<div class="tri-card" role="dialog" aria-modal="true" aria-label="Розкласти вхідні">
+      w.innerHTML = `<div class="tri-card${i || hist.length ? ' swap' : ''}" role="dialog" aria-modal="true" aria-label="Розкласти вхідні">
         <header><span>${i + 1} з ${list.length}</span><button type="button" class="icon-btn" data-x>${icon('x')}</button></header>
         <div class="tri-bar"><i style="width:${i / list.length * 100}%"></i></div>
         <h2>${esc(it.text)}</h2>
@@ -510,7 +520,21 @@ export function tasksPage(cfg) {
           <button type="button" class="btn sm ghost" data-t="skip">Пропустити <kbd>→</kbd></button>
         </footer></div>`;
     };
+    // фінал: галочка малюється, навколо — розліт крапок; закривається сам або дотиком
+    let finT = 0;
+    const finale = () => {
+      const n = hist.filter(h => h.a !== 'skip').length, skipped = hist.filter(h => h.a === 'skip').length;
+      w.classList.add('fin');
+      w.innerHTML = `<div class="tri-card tri-fin" role="status">
+        <div class="fin-mark"><span class="fin-burst">${Array.from({ length: 14 }, (_, k) => `<i style="--a:${k * 360 / 14}deg;--d:${60 + (k % 3) * 18}px"></i>`).join('')}</span>
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28"/><path d="M20 33.5l8.5 8.5L45 24.5"/></svg></div>
+        <h2>${skipped ? 'Готово' : 'Вхідні порожні'}</h2>
+        <p>${n ? `Розкладено: ${n}` : ''}${skipped ? `${n ? ' · ' : ''}пропущено: ${skipped}` : ''}</p></div>`;
+      if (navigator.vibrate) navigator.vibrate([18, 60, 28]);
+      finT = setTimeout(close, 1900);
+    };
     const act = async a => {
+      if (w.classList.contains('fin')) return close();
       const it = list[i];
       if (a === 'back') {
         const h = hist.pop(); if (!h) return;
@@ -534,10 +558,15 @@ export function tasksPage(cfg) {
       else if (e.key === 'ArrowRight') act('skip');
       else if (e.key === 'ArrowLeft') act('back');
     };
-    const close = () => { w.remove(); document.removeEventListener('keydown', key, true); changed(); };
+    let closed = false;
+    const close = () => {
+      if (closed) return; closed = true; clearTimeout(finT);
+      document.removeEventListener('keydown', key, true);
+      w.classList.add('out'); setTimeout(() => w.remove(), 260); changed();
+    };
     document.addEventListener('keydown', key, true);
     w.addEventListener('click', e => {
-      if (e.target === w || e.target.closest('[data-x]')) return close();
+      if (e.target === w || e.target.closest('[data-x]') || w.classList.contains('fin')) return close();
       const s = e.target.closest('[data-s]'); if (s) return act('s:' + s.dataset.s);
       const t = e.target.closest('[data-t]'); if (t) act(t.dataset.t);
     });

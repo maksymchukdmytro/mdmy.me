@@ -11,7 +11,7 @@
 | Застосунок (Android тощо) | `POST /api/auth/token {login, password, client: "android"}` → `{token, expiresInDays, account}`. Далі — заголовок `Authorization: Bearer <token>` (без `X-MDMY`). |
 | Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Пускає лише власника привʼязаного до асистента бота (підпис `initData` перевіряється токеном бота). |
 
-Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис,
+Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin}`),
 `GET /api/sessions` — активні входи, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
 Обмеження: 8 спроб входу за 10 хвилин з однієї адреси.
 
@@ -63,7 +63,7 @@
 | `GET search?q` | Пошук по всьому, що сказано асистенту, і по записах |
 | `POST message {text}` | Повідомлення асистенту (як у Telegram): `{reply, done[], items[], msgId, undoable}` |
 | `POST undo {msgId}` | Скасувати дії повідомлення |
-| `GET settings`, `POST settings` | Налаштування асистента (ключ Claude і токен бота назад не віддаються) |
+| `GET settings`, `POST settings` | Налаштування асистента (ключ Claude і токен бота назад не віддаються). `style` — стиль спілкування (промпт власника, до 1500 символів). Ключ, модель і бота (`anthropicKey`, `clearKey`, `model`, `botToken`, `clearBot`, `unlink`) бачить і змінює лише адміністратор; іншим — 403, а в `GET` цих полів немає (`admin: false`) |
 | `POST plan`, `POST summary` | Ранковий план / підсумок дня (і надіслати в Telegram) |
 
 Голос: `POST /api/stt/transcribe?lang=uk|ru|en|auto`, тіло — сирі байти аудіо (webm/ogg/m4a/wav, до 20 МБ) → `{text, duration, …}`; `GET /api/stt/health`.
@@ -102,8 +102,8 @@
 
 | Метод і шлях | Що робить |
 |---|---|
-| `GET /api/habits` | `{list, today, time, on}`; звичка: `{id, title, icon, why, days, ask, active, start, todayPlanned, today: 1·0·null, week[7] {day, planned, mark}, streak, best}` |
-| `POST /api/habits` | Створити `{title, icon?, why?, days?, ask?}` |
+| `GET /api/habits` | `{list, today, time, on}`; звичка: `{id, title, icon, why, days, ask, active, start, todayPlanned, today: 1·0·null, remind, dayNo, week[7] {day, planned, mark, future, today}, streak, best}`; `week` — тиждень звички: перший елемент — перший день (start), з 8-го дня — наступні 7 |
+| `POST /api/habits` | Створити `{title, icon?, why?, days?, ask?, remind?}`; `remind` — `HH:MM` або null: нагадування у вибрані дні (Telegram «Зроблено / Не сьогодні» і push), якщо звичку ще не відмічено |
 | `GET /api/habits/:id?month=YYYY-MM` | Звичка + `month {days[{day, planned, mark, future}], planned, done, missed}` |
 | `PATCH / DELETE /api/habits/:id` | Змінити / видалити (разом з історією) |
 | `POST /api/habits/:id/mark {day, done}` | `done`: true ✓, false ✗, null — прибрати відмітку; лише сьогодні й минулі дні |

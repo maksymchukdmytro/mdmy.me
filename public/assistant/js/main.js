@@ -1,6 +1,7 @@
 // mdmy · персональний асистент — точка входу.
 // Оболонка (бічна панель, верхня смуга, нижня панель на телефоні), маршрути #/…, вхід, тема, командна палітра (Ctrl+K).
 import { api, post, onUnauthorized, telegramInitData, telegramLogin, clearToken } from './api.js';
+import { wordmark } from './logo.js';
 import { icon } from './icons.js';
 import { $, $$, esc, pref, toast, isTyping, debounce, fmtDue, sheet } from './ui.js';
 import { meta, refreshMeta, onMeta, openSpaces, space } from './store.js';
@@ -32,8 +33,8 @@ function showLogin(err) {
   closeTask();
   app.innerHTML = `<main class="login">
     <form class="login-card" id="loginForm">
-      <div class="login-logo"><span class="ws-logo lg">m</span></div>
-      <h1>Вхід у mdmy</h1>
+      <div class="login-logo"><span class="ws-logo lg">${wordmark}</span></div>
+      <h1>Вхід</h1>
       <p class="muted">Задачі, нотатки й персональний асистент</p>
       <label class="field"><span>Логін</span><input name="login" autocomplete="username" autocapitalize="off" required></label>
       <label class="field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required></label>
@@ -56,7 +57,7 @@ function shell() {
   app.innerHTML = `<div class="app${pref.get('sideHidden', false) ? ' side-hidden' : ''}" id="shell">
     <aside class="side" id="side" aria-label="Навігація">
       <div class="side-top">
-        <a class="ws" href="#/today"><span class="ws-logo">m</span><span class="ws-name">${esc(account.name || 'mdmy')}</span></a>
+        <a class="ws" href="#/today" aria-label="MDMY — Сьогодні"><span class="ws-logo">${wordmark}</span></a>
         <button class="icon-btn" data-act="side-toggle" title="Сховати панель">${icon('sidebar')}</button>
       </div>
       <button class="side-item" data-act="search">${icon('search')}<span>Пошук</span><kbd>Ctrl K</kbd></button>

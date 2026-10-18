@@ -1,4 +1,5 @@
-// Налаштування: простори, асистент (Claude), Telegram, розклад, вигляд, пристрої й входи, обліковий запис.
+// Налаштування: простори, асистент (Claude), стиль спілкування, сповіщення, Telegram, розклад, вигляд, пристрої й входи, обліковий запис.
+// «Асистент» і «Telegram» (ключ Claude, модель, бот) бачить і змінює лише адміністратор (accounts.role = 'admin').
 import { get, post, patch, del, api } from '../api.js';
 import { icon, SPACE_ICONS } from '../icons.js';
 import { $, $$, esc, pref, toast, fail, menu, confirmBox, fmtDate } from '../ui.js';
@@ -6,6 +7,13 @@ import { meta, refreshMeta } from '../store.js';
 import * as push from '../push.js';
 
 const TZ = [['Europe/Kyiv', 'Київ'], ['Europe/Chisinau', 'Кишинів'], ['Europe/Warsaw', 'Варшава'], ['Europe/Berlin', 'Берлін'], ['Europe/Prague', 'Прага'], ['Europe/London', 'Лондон'], ['America/New_York', 'Нью-Йорк']];
+const ADMIN = ['ai', 'tg'];          // ключ Claude, модель і бот — лише для адміністратора
+const STYLES = [
+  ['Коротко', 'Відповідай дуже коротко, 1–2 речення, без вступів і без емодзі.'],
+  ['Дружньо', 'Звертайся на «ти», тепло й підбадьорливо, можна 1–2 емодзі.'],
+  ['Діловито', 'Стримано й по суті, на «ви», списками, без емодзі.'],
+  ['З гумором', 'Легко і з добрим гумором, але без зайвого тексту.']
+];
 const CLIENT = { web: 'Браузер', android: 'Android', telegram: 'Telegram', app: 'Застосунок' };
 
 export function settingsPage(sub) {
@@ -14,8 +22,8 @@ export function settingsPage(sub) {
     root = el;
     root.innerHTML = `<div class="page settings">
       <div class="page-head"><h1 class="page-title">Налаштування</h1></div>
-      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
-        .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}">${l}</a>`).join('')}</nav>
+      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['style', 'Стиль спілкування'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис']]
+        .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}"${ADMIN.includes(k) ? ' hidden' : ''}>${l}</a>`).join('')}</nav>
 
       <section class="set" id="set-spaces">
         <h2>Простори</h2>
@@ -24,11 +32,19 @@ export function settingsPage(sub) {
         <button type="button" class="btn sm" data-a="space-add">${icon('plus', 14)}Новий простір</button>
       </section>
 
-      <section class="set" id="set-ai">
+      <section class="set" id="set-ai" hidden>
         <h2>Асистент</h2>
         <p class="muted">Розуміє голос і текст, перетворює на задачі, нагадування й нотатки. Ключ створюється на <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>; зберігається лише на сервері.</p>
         <div class="kv"><span>Ключ Claude API</span><div><input type="password" data-f="anthropicKey" placeholder="sk-ant-…" autocomplete="off"><p class="small key-state"></p></div></div>
         <div class="kv"><span>Модель</span><div><input data-f="model" placeholder="claude-haiku-5-5"></div></div>
+      </section>
+
+      <section class="set" id="set-style">
+        <h2>Стиль спілкування</h2>
+        <p class="muted">Опишіть своїми словами, як асистент має з вами говорити — у застосунку й у Telegram: відповіді, ранковий план, підсумок дня.</p>
+        <div class="style-presets">${STYLES.map(([l, t]) => `<button type="button" class="chip" data-style="${esc(t)}">${l}</button>`).join('')}</div>
+        <textarea class="style-in" data-f="style" rows="4" maxlength="1500" placeholder="Наприклад: на «ти», коротко, без зайвих емодзі. Ранковий план — списком із 3 головних справ. Підсумок — чесно, з одним порадою на завтра."></textarea>
+        <div class="row-act"><button type="button" class="btn sm primary" data-a="style-save">Зберегти стиль</button><span class="muted small style-state"></span></div>
       </section>
 
       <section class="set" id="set-notify">
@@ -38,7 +54,7 @@ export function settingsPage(sub) {
         <div class="push-devices"></div>
       </section>
 
-      <section class="set" id="set-tg">
+      <section class="set" id="set-tg" hidden>
         <h2>Telegram</h2>
         <p class="muted">Бот приймає голосові й текст, надсилає нагадування, ранковий план і підсумок дня, а кнопка «Задачі» в ньому відкриває цей застосунок. Створіть бота в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (<code>/newbot</code>) і вставте токен.</p>
         <div class="kv"><span>Токен бота</span><div><input type="password" data-f="botToken" placeholder="123456789:AA…" autocomplete="off"></div></div>
@@ -86,13 +102,16 @@ export function settingsPage(sub) {
   function fill(x) {
     s = x;
     const f = k => $(`[data-f="${k}"]`, root);
-    f('anthropicKey').value = ''; f('botToken').value = '';
-    f('model').value = s.model;
-    $('.key-state', root).innerHTML = s.hasKey ? `Ключ задано (${esc(s.keyHint)}) · <button type="button" class="link" data-a="clear-key">видалити</button>` : '<span class="muted">Ключ не задано — асистент не зможе розбирати повідомлення.</span>';
+    ADMIN.forEach(k => { $(`#set-${k}`, root).hidden = !s.admin; $(`.set-nav [data-k="${k}"]`, root).hidden = !s.admin; });
+    if (document.activeElement !== f('style')) f('style').value = s.style || '';
     const tz = f('tz'); tz.value = s.tz; if (tz.value !== s.tz) { tz.add(new Option(s.tz, s.tz)); tz.value = s.tz; }
     f('morningTime').value = s.morningTime; f('morningOn').checked = s.morningOn;
     f('summaryTime').value = s.summaryTime; f('summaryOn').checked = s.summaryOn;
     f('voiceLang').value = s.voiceLang;
+    if (!s.admin) return;
+    f('anthropicKey').value = ''; f('botToken').value = '';
+    f('model').value = s.model;
+    $('.key-state', root).innerHTML = s.hasKey ? `Ключ задано (${esc(s.keyHint)}) · <button type="button" class="link" data-a="clear-key">видалити</button>` : '<span class="muted">Ключ не задано — асистент не зможе розбирати повідомлення.</span>';
     const bs = $('.bot-state', root);
     if (!s.hasBot) bs.innerHTML = '<p class="muted small">Бот не підключено.</p>';
     else if (!s.linked) bs.innerHTML = `<p>Бот <b>@${esc(s.botName)}</b> підключено. Привʼяжіть свій Telegram:</p><a class="btn primary sm" href="${esc(s.linkUrl)}" target="_blank" rel="noopener">${icon('telegram', 14)}Відкрити бота й натиснути Start</a>`;
@@ -103,10 +122,13 @@ export function settingsPage(sub) {
   }
   async function saveSettings(extra) {
     const f = k => $(`[data-f="${k}"]`, root), err = $('.set-save .err', root); err.textContent = '';
-    const body = extra || { model: f('model').value.trim() || 'claude-haiku-5-5', tz: f('tz').value, morningTime: f('morningTime').value || '08:00', morningOn: f('morningOn').checked,
+    const body = extra || { tz: f('tz').value, morningTime: f('morningTime').value || '08:00', morningOn: f('morningOn').checked,
                             summaryTime: f('summaryTime').value || '21:00', summaryOn: f('summaryOn').checked, voiceLang: f('voiceLang').value };
-    if (!extra && f('anthropicKey').value.trim()) body.anthropicKey = f('anthropicKey').value.trim();
-    if (!extra && f('botToken').value.trim()) body.botToken = f('botToken').value.trim();
+    if (!extra && s && s.admin) {
+      body.model = f('model').value.trim() || 'claude-haiku-5-5';
+      if (f('anthropicKey').value.trim()) body.anthropicKey = f('anthropicKey').value.trim();
+      if (f('botToken').value.trim()) body.botToken = f('botToken').value.trim();
+    }
     try { fill(await post('assistant/settings', body)); toast('Збережено'); } catch (e) { err.textContent = e.message; }
   }
 
@@ -153,11 +175,17 @@ export function settingsPage(sub) {
   }
 
   async function onClick(e) {
-    const a = e.target.closest('[data-a]'), th = e.target.closest('[data-theme]');
+    const a = e.target.closest('[data-a]'), th = e.target.closest('[data-theme]'), sty = e.target.closest('[data-style]');
+    if (sty) {
+      const ta = $('[data-f="style"]', root), t = sty.dataset.style;
+      ta.value = ta.value.trim() && !STYLES.some(([, x]) => x === ta.value.trim()) ? ta.value.trim() + ' ' + t : t;
+      $('.style-state', root).textContent = 'Не збережено'; ta.focus(); return;
+    }
     if (th) { window.MDMY.setTheme(th.dataset.theme); $$('[data-theme]', root).forEach(b => b.setAttribute('aria-checked', String(b === th))); return; }
     if (!a) return;
     const k = a.dataset.a, row = a.closest('[data-key]'), key = row && row.dataset.key;
     if (k === 'save') saveSettings();
+    if (k === 'style-save') { await saveSettings({ style: $('[data-f="style"]', root).value }); $('.style-state', root).textContent = ''; }
     if (k === 'clear-key' && await confirmBox('Видалити ключ Claude API?')) saveSettings({ clearKey: true });
     if (k === 'unlink' && await confirmBox('Відвʼязати Telegram-чат? Нагадування перестануть приходити.', { ok: 'Відвʼязати' })) saveSettings({ unlink: true });
     if (k === 'clear-bot' && await confirmBox('Видалити бота з налаштувань?')) saveSettings({ clearBot: true });

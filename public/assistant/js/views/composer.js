@@ -42,7 +42,17 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
 
     // підзадачі (лише вручну): Enter — наступний рядок
     const subLine = () => `<label class="cmp-sub">${icon('circle', 16)}<input placeholder="Підзадача" maxlength="2000" enterkeyhint="next"></label>`;
+    // Backspace у порожньому рядку — прибрати рядок і повернутись на попередній
+    const back = e => {
+      const i = e.target; if (!i.matches('input') || i.value !== '') return;
+      e.preventDefault();
+      const line = i.closest('.cmp-sub'), prev = line.previousElementSibling;
+      if (!prev) { if (line.nextElementSibling) return; subsBox.hidden = true; subsBox.innerHTML = ''; drawChips(); ta.focus(); return; }
+      const pi = prev.querySelector('input'); pi.focus(); pi.setSelectionRange(pi.value.length, pi.value.length); line.remove();
+    };
+    subsBox.addEventListener('beforeinput', e => { if (e.inputType === 'deleteContentBackward') back(e); });
     subsBox.addEventListener('keydown', e => {
+      if (e.key === 'Backspace') return back(e);
       if (e.key !== 'Enter' || !e.target.matches('input')) return;
       e.preventDefault();
       const line = e.target.closest('.cmp-sub');

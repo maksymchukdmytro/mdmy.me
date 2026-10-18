@@ -18,7 +18,7 @@ export async function openTask(id) {
     requestAnimationFrame(() => w.classList.add('in'));
     w.querySelector('.panel-scrim').addEventListener('click', () => go(pageHref()));
     const pnl = w.querySelector('.panel');
-    pnl.addEventListener('click', onClick); pnl.addEventListener('change', onChange); pnl.addEventListener('keydown', onPanelKey);
+    pnl.addEventListener('click', onClick); pnl.addEventListener('change', onChange); pnl.addEventListener('keydown', onPanelKey); pnl.addEventListener('beforeinput', onBeforeInput);
     dragToClose(pnl, () => go(pageHref()), '.sheet-grab, .panel-top', true);   // телефон: картка — аркуш, тягни вниз, щоб закрити
     cur = { id, el: w, it: null };
     document.addEventListener('keydown', onKey, true);
@@ -215,15 +215,36 @@ async function onChange(e) {
   if (el.dataset.a === 'tag-add') addTag(el);
   if (el.dataset.a === 'sub-text') {
     const id = +el.closest('.sub').dataset.id;
-    if (el.value.trim()) { try { await patch('assistant/items/' + id, { text: el.value.trim() }); changed(); } catch (err) { fail(err); } }
+    const k = (cur.it.children || []).find(x => x.id === id);
+    if (!el.value.trim()) { if (k) el.value = k.text; return; }        // порожнє — повертаємо назву (видалити — Backspace у порожньому полі або ×)
+    try { await patch('assistant/items/' + id, { text: el.value.trim() }); if (k) k.text = el.value.trim(); changed(); } catch (err) { fail(err); }
   }
 }
 function addTag(el) {
   const t = el.value.trim().replace(/^#/, '').toLowerCase(); el.value = '';
   if (t && cur && !(cur.it.tags || []).includes(t)) save({ tags: [...(cur.it.tags || []), t] }).then(() => { const i = cur && cur.el.querySelector('.tag-in'); if (i) i.focus(); });
 }
+// Backspace у порожньому полі: у «Додати підзадачу» — перейти в кінець останньої підзадачі,
+// у підзадачі — видалити її й перейти на попередню (як у Notion). Телефонні клавіатури інколи не шлють keydown
+// з key=Backspace, тому ловимо й beforeinput (якщо keydown уже скасовано, beforeinput не приходить).
+function backspace(e) {
+  const el = e.target; if (!cur || el.value !== '') return false;
+  if (el.dataset.a !== 'sub-add' && el.dataset.a !== 'sub-text') return false;
+  e.preventDefault();
+  const focusEnd = i => { if (!i) return; i.focus(); const n = i.value.length; try { i.setSelectionRange(n, n); } catch (x) {} };
+  if (el.dataset.a === 'sub-add') { const last = cur.el.querySelector('.subs .sub:last-child input'); focusEnd(last); return true; }
+  const row = el.closest('.sub'), prev = row.previousElementSibling, id = +row.dataset.id, it = cur.it;
+  focusEnd(prev ? prev.querySelector('input') : cur.el.querySelector('[data-a="sub-add"]'));
+  row.classList.add('leave');
+  setTimeout(() => row.remove(), 180);
+  it.children = (it.children || []).filter(x => x.id !== id); subsCount();
+  del('assistant/items/' + id).then(changed, err => { fail(err); });
+  return true;
+}
+function onBeforeInput(e) { if (e.inputType === 'deleteContentBackward') backspace(e); }
 async function onPanelKey(e) {
   const el = e.target;
+  if (e.key === 'Backspace' && backspace(e)) return;
   if (el.dataset.a === 'tag-add' && (e.key === 'Enter' || e.key === ',')) { e.preventDefault(); return addTag(el); }
   if (el.dataset.a === 'tag-add' && e.key === 'Backspace' && !el.value && cur && (cur.it.tags || []).length) return save({ tags: cur.it.tags.slice(0, -1) });
   if (e.key !== 'Enter') return;

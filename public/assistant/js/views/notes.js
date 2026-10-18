@@ -18,7 +18,7 @@ export function notesPage() {
       </div></div>
       <button type="button" class="note-new desk-only" data-new>${icon('plus', 16)}<span>Нова нотатка</span></button>
       <div class="notes"></div>
-      <button type="button" class="fab phone-only" data-new aria-label="Нова нотатка">${icon('plus', 26)}</button></div>`;
+      <button type="button" class="fab" data-new aria-label="Нова нотатка" title="Нова нотатка">${icon('plus', 26)}</button></div>`;
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { q = s.value.trim(); load(); }, 250));
     root.addEventListener('click', e => {
