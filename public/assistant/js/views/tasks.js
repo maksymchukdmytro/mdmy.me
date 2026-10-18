@@ -1,0 +1,556 @@
+// Сторінка задач (простір, «Сьогодні», «Найближчі», «Усі»): режими «Список» і «Дошка» (канбан за статусами),
+// пошук, фільтри, сортування, групування, швидке додавання, вибір і масові дії, розбір «Вхідних» по одній.
+import { api, get, post } from '../api.js';
+import { icon, STATUS_ICON } from '../icons.js';
+import { $, $$, esc, pref, toast, fail, menu, confirmBox, debounce, fmtDue, dueBucket, BUCKETS, isTyping, spin } from '../ui.js';
+import { meta, space, status, openSpaces, firstStatus } from '../store.js';
+import { go, taskHref } from '../nav.js';
+import { datePicker } from './panel.js';
+
+const PAGE = 100;
+const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
+const VIEWS = [['open', 'Будь-коли'], ['today', 'Сьогодні й прострочене'], ['overdue', 'Прострочене'], ['week', 'Найближчі 7 днів'], ['nodate', 'Без строку']];
+const SORTS = [['smart', 'За строком'], ['prio', 'За пріоритетом'], ['created', 'Спершу нові'], ['alpha', 'За алфавітом'], ['manual', 'Вручну (як на дошці)']];
+const GROUPS = [['date', 'За строком'], ['status', 'За статусом'], ['space', 'За простором'], ['none', 'Без груп']];
+
+export function tasksPage(cfg) {
+  const K = k => `tasks:${cfg.key}:${k}`;
+  const st = {
+    mode: pref.get(K('mode'), 'list'), sort: pref.get(K('sort'), 'smart'), group: pref.get(K('group'), cfg.group || 'date'),
+    view: cfg.view, q: '', project: '', prio: 0, showDone: false,
+    items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0, collapsed: new Set(pref.get(K('collapsed'), []))
+  };
+  const fixedView = cfg.view !== 'open';
+  const cross = cfg.area === 'all';
+  let root, top;
+
+  // ---------- каркас ----------
+  function render(el, topAct) {
+    root = el; top = topAct;
+    root.innerHTML = `<div class="page tasks-page" data-layout="${st.mode}">
+      <div class="page-head">
+        <div class="page-icon">${icon(cfg.icon, 30)}</div>
+        <h1 class="page-title">${esc(cfg.title)}</h1>
+        ${cfg.desc ? `<p class="page-desc">${esc(cfg.desc)}</p>` : ''}
+      </div>
+      <div class="inbox-bar" hidden></div>
+      <div class="vbar">
+        <div class="vtabs" role="tablist">
+          <button type="button" data-mode="list" role="tab">${icon('list')}<span>Список</span></button>
+          <button type="button" data-mode="board" role="tab">${icon('board')}<span>Дошка</span></button>
+        </div>
+        <div class="vtools">
+          <label class="vsearch">${icon('search', 15)}<input type="search" placeholder="Пошук" aria-label="Пошук у задачах"></label>
+          <button type="button" class="tbtn" data-t="filter" title="Фільтр">${icon('filter', 15)}<span>Фільтр</span></button>
+          <button type="button" class="tbtn list-only" data-t="sort" title="Сортування">${icon('sort', 15)}<span>Сортування</span></button>
+          <button type="button" class="tbtn list-only" data-t="group" title="Групування">${icon('group', 15)}<span>Групи</span></button>
+          <button type="button" class="tbtn" data-t="select" title="Вибрати кілька">${icon('check', 15)}<span>Вибрати</span></button>
+          <button type="button" class="btn primary sm" data-t="new">${icon('plus', 15)}<span>Нова</span></button>
+        </div>
+      </div>
+      <div class="fchips"></div>
+      <div class="tcontent"></div>
+      <button type="button" class="btn more" hidden></button>
+      <div class="bulk" hidden></div>
+    </div>`;
+    root.addEventListener('click', onClick);
+    root.addEventListener('keydown', onKeyIn);
+    const s = $('.vsearch input', root);
+    s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
+    document.addEventListener('keydown', onKey);
+    syncBar(); load();
+  }
+  function destroy() { document.removeEventListener('keydown', onKey); }
+
+  function syncBar() {
+    const page = $('.tasks-page', root); page.dataset.layout = st.mode;
+    $$('.vtabs button', root).forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === st.mode)));
+    const chips = [];
+    if (!fixedView && st.view !== 'open') chips.push(['view', 'Строк: ' + VIEWS.find(v => v[0] === st.view)[1]]);
+    if (st.prio) chips.push(['prio', st.prio === 2 ? 'Лише термінові' : 'Важливі й термінові']);
+    if (st.project) chips.push(['project', 'Проєкт: ' + ((meta.projects.find(p => p.id === +st.project) || {}).name || '—')]);
+    if (st.showDone && st.mode === 'list') chips.push(['done', 'Виконані']);
+    $('.fchips', root).innerHTML = chips.map(([k, l]) => `<button type="button" class="fchip" data-clear="${k}">${esc(l)}${icon('x', 12)}</button>`).join('');
+    $('[data-t="filter"]', root).classList.toggle('on', chips.length > 0);
+    $('[data-t="select"]', root).classList.toggle('on', st.selecting);
+  }
+
+  // ---------- завантаження ----------
+  function params(extra) {
+    const p = new URLSearchParams({ area: cfg.area, view: st.showDone ? 'done' : st.view, sort: st.group === 'status' && st.sort === 'smart' ? 'smart' : st.sort, ...extra });
+    if (st.q) p.set('q', st.q); if (st.project) p.set('project', st.project); if (st.prio) p.set('prio', st.prio);
+    return p;
+  }
+  async function load(more) {
+    const my = ++st.loading, box = $('.tcontent', root);
+    if (!more) box.classList.add('busy');
+    try {
+      if (st.mode === 'board') {
+        const p = params({}); p.set('view', st.view); p.delete('sort');
+        const d = await get('assistant/board?' + p);
+        if (my !== st.loading) return;
+        st.columns = d.columns; st.counts = d.counts;
+      } else {
+        const d = await get('assistant/tasks?' + params({ offset: more ? st.items.length : 0, limit: PAGE }));
+        if (my !== st.loading) return;
+        st.items = more ? st.items.concat(d.list) : d.list; st.total = d.total; st.counts = d.counts;
+      }
+    } catch (e) { if (my === st.loading) box.innerHTML = `<p class="err">${esc(e.message)}</p>`; box.classList.remove('busy'); return; }
+    box.classList.remove('busy');
+    draw();
+  }
+  function draw() {
+    syncBar(); drawInbox();
+    if (st.mode === 'board') drawBoard(); else drawList();
+    drawBulk();
+  }
+  const refresh = () => load();
+
+  // ---------- «Вхідні» ----------
+  function drawInbox() {
+    const bar = $('.inbox-bar', root), n = (meta.counts || {}).inbox || 0;
+    bar.hidden = !(cfg.area === 'inbox' && n > 0 && !st.showDone);
+    if (bar.hidden) return;
+    bar.innerHTML = `<span>${icon('inbox', 16)}<b>${n}</b> ${n === 1 ? 'задача чекає' : 'задач чекають'}, щоб їх розклали по просторах</span>
+      <button type="button" class="btn primary sm" data-t="triage">${icon('arrowRight', 14)}Розкласти по одній</button>
+      <button type="button" class="btn sm" data-t="suggest">${icon('sparkles', 14)}Підказати</button>
+      ${st.sug.size ? `<button type="button" class="btn sm" data-t="accept">${icon('check', 14)}Прийняти підказки (${st.sug.size})</button>` : ''}`;
+  }
+
+  // ---------- список ----------
+  function groupOf(it) {
+    if (st.showDone) return ['done', 'Виконані'];
+    if (st.group === 'status') return [it.status, status(it.status).name];
+    if (st.group === 'space') return [it.area, space(it.area).name];
+    if (st.group === 'date') { const b = dueBucket(it); return [b, BUCKETS[b]]; }
+    return ['all', ''];
+  }
+  const ORDER = {
+    date: Object.keys(BUCKETS),
+    status: () => meta.statuses.map(s => s.key),
+    space: () => meta.spaces.map(s => s.key)
+  };
+  function drawList() {
+    const box = $('.tcontent', root);
+    const add = `<div class="qadd">${icon('plus', 16)}<input class="qadd-in" placeholder="Нова задача — Enter, щоб додати" maxlength="2000">
+      <button type="button" class="icon-btn" data-t="ai-add" title="Через асистента: сам розбере дату, повтор, простір («завтра о 10 подзвонити…»)">${icon('sparkles')}</button></div>`;
+    if (!st.items.length) {
+      box.innerHTML = add + `<div class="empty">${icon(st.q ? 'search' : cfg.area === 'inbox' ? 'inbox' : 'checkCircle', 28)}<p>${
+        st.q || st.project || st.prio ? 'Нічого не знайдено.' : st.showDone ? 'Виконаних задач тут ще немає.' : cfg.area === 'inbox' ? 'У вхідних порожньо. Усе розкладено.' : 'Задач немає. Додайте першу або скажіть асистенту.'}</p></div>`;
+    } else {
+      const groups = new Map();
+      for (const it of st.items) { const [k, l] = groupOf(it); if (!groups.has(k)) groups.set(k, { l, list: [] }); groups.get(k).list.push(it); }
+      let keys = [...groups.keys()];
+      const ord = typeof ORDER[st.group] === 'function' ? ORDER[st.group]() : ORDER[st.group];
+      if (ord && !st.showDone && st.sort === 'smart') keys.sort((a, b) => ord.indexOf(a) - ord.indexOf(b));
+      box.innerHTML = add + keys.map(k => {
+        const g = groups.get(k), hid = st.collapsed.has(k);
+        const head = g.l ? `<button type="button" class="grp-h${k === 'overdue' ? ' late' : ''}" data-grp="${esc(k)}">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}${
+          st.group === 'space' && !st.showDone ? icon(space(k).icon, 14) : st.group === 'status' && !st.showDone ? icon(STATUS_ICON[k] || 'circle', 14) : ''}<span>${esc(g.l)}</span><b>${g.list.length}</b></button>` : '';
+        return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it) + it.children.map(c => rowHtml(c, true)).join('')).join('')}</div></section>`;
+      }).join('');
+    }
+    const more = $('.more', root), rest = st.total - st.items.length;
+    more.hidden = rest <= 0 || st.mode !== 'list';
+    more.textContent = `Показати ще ${Math.min(rest, PAGE)} з ${rest}`;
+  }
+  function props(it, child) {
+    const out = [];
+    if (!child && !it.done && it.area === 'inbox') {
+      const sug = st.sug.get(it.id);
+      out.push(`<span class="quick">${sug ? `<button type="button" class="qchip sug" data-a="area" data-v="${sug}" title="Підказка асистента">${icon('sparkles', 12)}${esc(space(sug).name)}</button>` : ''}${
+        openSpaces().filter(s => s.key !== 'inbox' && s.key !== sug).slice(0, 3).map(s => `<button type="button" class="qchip" data-a="area" data-v="${s.key}" title="Перенести в «${esc(s.name)}»">${icon(s.icon, 12)}<span>${esc(s.name)}</span></button>`).join('')}${
+        openSpaces().length > 4 ? `<button type="button" class="qchip" data-a="area-menu" title="Інший простір">${icon('more', 12)}</button>` : ''}</span>`);
+    }
+    if (it.status !== firstStatus() && !it.done) out.push(`<span class="prop st-${it.status}">${icon(STATUS_ICON[it.status] || 'circle', 13)}${esc(status(it.status).name)}</span>`);
+    if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
+    if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
+    if (it.project && !child) out.push(`<span class="prop">${icon('folder', 13)}${esc(it.project)}</span>`);
+    if (cross && !child && it.area !== 'inbox') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
+    return out.join('');
+  }
+  function rowHtml(it, child) {
+    const kids = it.children || [], kd = kids.filter(k => k.done).length;
+    return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}">
+      <label class="row-sel"><input type="checkbox" data-a="sel" ${st.sel.has(it.id) ? 'checked' : ''} aria-label="Вибрати"></label>
+      <button type="button" class="chk${it.done ? ' on' : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
+      <a class="row-main" href="${taskHref(it.id)}" data-a="open">
+        <span class="row-title">${esc(it.text)}</span>
+        ${!child && kids.length ? `<span class="row-meta">${icon('subtasks', 13)}${kd}/${kids.length}</span>` : ''}
+        ${it.description ? `<span class="row-meta" title="Є опис">${icon('text', 13)}</span>` : ''}
+      </a>
+      <div class="row-props">${props(it, child)}</div>
+    </div>`;
+  }
+
+  // ---------- дошка ----------
+  function cardHtml(it) {
+    const kids = it.children || [], kd = kids.filter(k => k.done).length;
+    const bits = [];
+    if (it.due_at) bits.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 12)}${esc(fmtDue(it.due_at))}</span>`);
+    if (it.priority) bits.push(`<span class="prop prio p${it.priority}">${icon('flag', 12)}${it.priority === 2 ? 'Термінова' : 'Важлива'}</span>`);
+    if (kids.length) bits.push(`<span class="prop">${icon('subtasks', 12)}${kd}/${kids.length}</span>`);
+    if (it.project) bits.push(`<span class="prop">${icon('folder', 12)}${esc(it.project)}</span>`);
+    if (cross) bits.push(`<span class="prop sp">${icon(space(it.area).icon, 12)}${esc(space(it.area).name)}</span>`);
+    return `<div class="card${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" tabindex="0">
+      <div class="card-title">${it.done ? icon('checkCircle', 14) : ''}${esc(it.text)}</div>
+      ${it.description ? `<div class="card-desc">${esc(it.description.slice(0, 140))}</div>` : ''}
+      ${bits.length ? `<div class="card-props">${bits.join('')}</div>` : ''}
+    </div>`;
+  }
+  function drawBoard() {
+    const box = $('.tcontent', root);
+    $('.more', root).hidden = true;
+    box.innerHTML = `<div class="board">${st.columns.map(c => `
+      <section class="col" data-status="${c.status}">
+        <header class="col-h"><span class="col-t st-${c.status}">${icon(STATUS_ICON[c.status] || 'circle', 14)}${esc(c.name)}</span><b>${c.total}</b>
+          ${c.done ? '' : `<button type="button" class="icon-btn xs" data-a="col-add" title="Нова картка">${icon('plus', 14)}</button>`}</header>
+        <div class="col-body">${c.items.map(cardHtml).join('')}
+          ${c.done ? (c.total > c.items.length ? `<p class="col-note">ще ${c.total - c.items.length}</p>` : '') + '<p class="col-note">за останні 14 днів</p>'
+                   : `<button type="button" class="col-add" data-a="col-add">${icon('plus', 14)}Нова</button>`}
+        </div>
+      </section>`).join('')}</div>`;
+    dnd($('.board', box));
+  }
+
+  // Перетягування карток: миша — одразу, палець — після короткого утримання (щоб не заважати прокрутці).
+  function dnd(board) {
+    let drag = null;
+    board.addEventListener('pointerdown', e => {
+      const card = e.target.closest('.card'); if (!card || e.button > 0 || st.selecting) return;
+      const sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
+      let timer = touch ? setTimeout(() => begin(e), 280) : 0, started = false;
+      const move = ev => {
+        if (!started) {
+          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) { if (touch) { clearTimeout(timer); cleanup(); } else begin(ev); }
+          return;
+        }
+        ev.preventDefault(); follow(ev);
+      };
+      const up = ev => { clearTimeout(timer); if (started) finish(ev); cleanup(); };
+      const cleanup = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); removeEventListener('touchmove', block); };
+      const block = ev => { if (started) ev.preventDefault(); };
+      addEventListener('pointermove', move, { passive: false }); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+      addEventListener('touchmove', block, { passive: false });
+      function begin(ev) {
+        started = true;
+        const r = card.getBoundingClientRect();
+        const ghost = card.cloneNode(true); ghost.classList.add('ghost'); ghost.style.width = r.width + 'px';
+        document.body.append(ghost);
+        const ph = document.createElement('div'); ph.className = 'card-ph'; ph.style.height = r.height + 'px';
+        card.after(ph); card.classList.add('dragging');
+        drag = { card, ghost, ph, dx: sx - r.left, dy: sy - r.top, from: card.closest('.col').dataset.status };
+        if (navigator.vibrate && touch) navigator.vibrate(15);
+        follow(ev);
+      }
+    });
+    function follow(ev) {
+      const d = drag; if (!d) return;
+      d.ghost.style.transform = `translate(${ev.clientX - d.dx}px, ${ev.clientY - d.dy}px) rotate(1.5deg)`;
+      d.ghost.style.display = 'none';
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      d.ghost.style.display = '';
+      const col = under && under.closest('.col');
+      if (col) {
+        const body = col.querySelector('.col-body');
+        const cards = [...body.querySelectorAll('.card:not(.dragging)')];
+        const after = cards.find(c => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+        if (after) body.insertBefore(d.ph, after); else body.insertBefore(d.ph, body.querySelector('.col-add, .col-note') || null);
+      }
+      // автопрокрутка біля країв
+      const r = board.getBoundingClientRect();
+      if (ev.clientX > r.right - 40) board.scrollLeft += 14; else if (ev.clientX < r.left + 40) board.scrollLeft -= 14;
+      if (ev.clientY > innerHeight - 50) scrollBy(0, 14); else if (ev.clientY < 60) scrollBy(0, -14);
+    }
+    async function finish() {
+      const d = drag; drag = null; if (!d) return;
+      const col = d.ph.closest('.col'), statusKey = col.dataset.status;
+      const prev = d.ph.previousElementSibling && d.ph.previousElementSibling.closest('.card:not(.dragging)');
+      const next = d.ph.nextElementSibling && d.ph.nextElementSibling.closest('.card:not(.dragging)');
+      d.ph.replaceWith(d.card); d.card.classList.remove('dragging'); d.ghost.remove();
+      const id = +d.card.dataset.id, body = {};
+      if (statusKey !== d.from) body.status = statusKey;
+      if (prev) body.after = +prev.dataset.id; else if (next) body.before = +next.dataset.id;
+      try {
+        const r = await post(`assistant/items/${id}/move`, body);
+        if (body.status && r.status !== statusKey) toast('Повторювана задача — перенесено на наступний раз: ' + fmtDue(r.due_at));
+        else if (body.status) toast(`→ ${status(statusKey).name}`);
+        changed();
+      } catch (e) { fail(e); load(); }
+    }
+    // клік по картці (без перетягування) — відкрити
+    board.addEventListener('click', e => {
+      const card = e.target.closest('.card'); if (!card || e.target.closest('[data-a]')) return;
+      if (st.selecting) { toggleSel(+card.dataset.id); return; }
+      go(taskHref(+card.dataset.id));
+    });
+    board.addEventListener('keydown', e => { const card = e.target.closest('.card'); if (card && e.key === 'Enter') go(taskHref(+card.dataset.id)); });
+  }
+
+  // ---------- додавання ----------
+  async function quickAdd(text, extra = {}) {
+    const area = cfg.area === 'all' ? 'inbox' : cfg.area;
+    const due = cfg.view === 'today' ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d; })() : null;
+    const body = { text, area, ...extra };
+    if (due && !extra.status) { const p = n => String(n).padStart(2, '0'); body.due = `${due.getFullYear()}-${p(due.getMonth() + 1)}-${p(due.getDate())}T${p(due.getHours())}:00`; }
+    const it = await post('assistant/items', body);
+    changed();
+    return it;
+  }
+  async function aiAdd(input) {
+    const text = input.value.trim(); if (!text) return input.focus();
+    const hint = cfg.area !== 'all' && cfg.area !== 'inbox' ? ` (простір: ${space(cfg.area).name})` : '';
+    input.disabled = true;
+    try {
+      const r = await post('assistant/message', { text: text + hint });
+      input.value = '';
+      toast([r.reply, ...(r.done || [])].filter(Boolean).join('\n') || 'Записав', r.undoable ? async () => { await post('assistant/undo', { msgId: r.msgId }); changed(); } : null, 6000);
+      changed();
+    } catch (e) { fail(e); }
+    input.disabled = false; input.focus();
+  }
+
+  // ---------- вибір і масові дії ----------
+  function toggleSel(id, on) {
+    if (on === undefined) on = !st.sel.has(id);
+    if (on) st.sel.add(id); else st.sel.delete(id);
+    if (st.sel.size && !st.selecting) st.selecting = true;
+    $$(`[data-id="${id}"]`, root).forEach(el => { el.classList.toggle('sel', on); const c = el.querySelector('[data-a="sel"]'); if (c) c.checked = on; });
+    drawBulk(); syncBar();
+  }
+  function allIds() { return st.mode === 'board' ? st.columns.flatMap(c => c.items.map(i => i.id)) : st.items.flatMap(i => [i.id, ...i.children.map(c => c.id)]); }
+  function findItem(id) {
+    const all = st.mode === 'board' ? st.columns.flatMap(c => c.items) : st.items.flatMap(i => [i, ...i.children]);
+    return all.find(x => x.id === id);
+  }
+  function drawBulk() {
+    const b = $('.bulk', root);
+    $('.tasks-page', root).classList.toggle('selecting', st.selecting);
+    b.hidden = !st.selecting;
+    if (b.hidden) return;
+    const n = st.sel.size;
+    b.innerHTML = `<b>${n ? `Вибрано: ${n}` : 'Позначте задачі'}</b>
+      <button type="button" class="bbtn" data-b="area" ${n ? '' : 'disabled'}>${icon('layers', 15)}<span>Простір</span></button>
+      <button type="button" class="bbtn" data-b="status" ${n ? '' : 'disabled'}>${icon('status', 15)}<span>Статус</span></button>
+      <button type="button" class="bbtn" data-b="due" ${n ? '' : 'disabled'}>${icon('calendar', 15)}<span>Строк</span></button>
+      <button type="button" class="bbtn" data-b="priority" ${n ? '' : 'disabled'}>${icon('flag', 15)}<span>Пріоритет</span></button>
+      <button type="button" class="bbtn" data-b="done" ${n ? '' : 'disabled'}>${icon('checkCircle', 15)}<span>Виконано</span></button>
+      <button type="button" class="bbtn danger" data-b="delete" ${n ? '' : 'disabled'}>${icon('trash', 15)}</button>
+      <span class="bulk-r"><button type="button" class="bbtn" data-b="all">Усі</button><button type="button" class="bbtn" data-b="close" title="Готово">${icon('x', 15)}</button></span>`;
+  }
+  async function bulk(action, value) {
+    const ids = [...st.sel]; if (!ids.length) return;
+    const prev = ids.map(findItem).filter(Boolean);
+    if (action === 'delete' && !await confirmBox(`Видалити ${ids.length} ${ids.length === 1 ? 'задачу' : 'задач'} разом із підзадачами?`)) return;
+    let r; try { r = await post('assistant/bulk', { ids, action, value }); } catch (e) { return fail(e); }
+    let undo = null, msg = `Готово: ${r.changed}`;
+    if (action === 'area') {
+      msg = `→ ${space(value).name}: ${r.changed}`;
+      undo = async () => { for (const s of meta.spaces) { const g = prev.filter(x => x.area === s.key).map(x => x.id); if (g.length) await post('assistant/bulk', { ids: g, action: 'area', value: s.key }); } changed(); };
+    } else if (action === 'status') {
+      msg = `→ ${status(value).name}: ${r.changed}`;
+      undo = async () => { for (const s of meta.statuses) { const g = prev.filter(x => x.status === s.key && !x.repeat).map(x => x.id); if (g.length) await post('assistant/bulk', { ids: g, action: 'status', value: s.key }); } changed(); };
+    } else if (action === 'done') {
+      msg = `Виконано: ${r.changed}`;
+      const g = prev.filter(x => !x.done && !x.repeat).map(x => x.id);
+      if (g.length) undo = async () => { await post('assistant/bulk', { ids: g, action: 'reopen' }); changed(); };
+    } else if (action === 'delete') msg = `Видалено: ${r.changed}`;
+    st.sel.clear(); st.selecting = false;
+    toast(msg, undo); changed();
+  }
+
+  // ---------- розбір «Вхідних» по одній ----------
+  async function triage() {
+    let d; try { d = await get('assistant/tasks?area=inbox&view=open&sort=created&limit=200'); } catch (e) { return fail(e); }
+    if (!d.list.length) return toast('У вхідних порожньо');
+    const list = d.list, hist = [], spaces = openSpaces().filter(s => s.key !== 'inbox').slice(0, 9);
+    let i = 0;
+    const w = document.createElement('div'); w.className = 'modal-wrap tri';
+    document.body.append(w);
+    const show = () => {
+      const it = list[i];
+      if (!it) { close(); toast(`Готово! Розкладено: ${hist.filter(h => h.a !== 'skip').length}`); return; }
+      const sug = st.sug.get(it.id);
+      w.innerHTML = `<div class="tri-card" role="dialog" aria-modal="true" aria-label="Розкласти вхідні">
+        <header><span>${i + 1} з ${list.length}</span><button type="button" class="icon-btn" data-x>${icon('x')}</button></header>
+        <div class="tri-bar"><i style="width:${i / list.length * 100}%"></i></div>
+        <h2>${esc(it.text)}</h2>
+        <div class="tri-meta">${props({ ...it, area: '' }, false)}</div>
+        ${it.description ? `<p class="tri-desc">${esc(it.description.slice(0, 300))}</p>` : ''}
+        ${sug ? `<p class="tri-sug">${icon('sparkles', 14)}Асистент радить: <b>${esc(space(sug).name)}</b></p>` : ''}
+        <div class="tri-spaces">${spaces.map((s, n) => `<button type="button" class="tri-sp${s.key === sug ? ' sug' : ''}" data-s="${s.key}">${icon(s.icon, 20)}<span>${esc(s.name)}</span><kbd>${n + 1}</kbd></button>`).join('')}</div>
+        <footer>
+          <button type="button" class="btn sm ghost" data-t="back" ${hist.length ? '' : 'disabled'}>${icon('chevronLeft', 14)}Назад</button>
+          <button type="button" class="btn sm ghost" data-t="done">${icon('checkCircle', 14)}Вже зроблено <kbd>D</kbd></button>
+          <button type="button" class="btn sm ghost" data-t="delete">${icon('trash', 14)}Видалити</button>
+          <button type="button" class="btn sm ghost" data-t="skip">Пропустити <kbd>→</kbd></button>
+        </footer></div>`;
+    };
+    const act = async a => {
+      const it = list[i];
+      if (a === 'back') {
+        const h = hist.pop(); if (!h) return;
+        try { if (h.a === 'area') await post('assistant/bulk', { ids: [h.id], action: 'area', value: 'inbox' }); if (h.a === 'done') await post(`assistant/items/${h.id}/reopen`); } catch (e) {}
+        i = h.i; return show();
+      }
+      if (!it) return;
+      try {
+        if (a.startsWith('s:')) { await post('assistant/bulk', { ids: [it.id], action: 'area', value: a.slice(2) }); st.sug.delete(it.id); a = 'area'; }
+        else if (a === 'done') await post(`assistant/items/${it.id}/complete`);
+        else if (a === 'delete') { if (!await confirmBox(`Видалити «${it.text}»?`)) return; await api('assistant/items/' + it.id, { method: 'DELETE' }); }
+      } catch (e) { return fail(e); }
+      hist.push({ id: it.id, a, i }); i++; show();
+    };
+    const key = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return close(); }
+      if (document.querySelector('.modal-wrap:not(.tri)')) return;
+      const n = +e.key;
+      if (n >= 1 && n <= spaces.length) { e.preventDefault(); act('s:' + spaces[n - 1].key); }
+      else if (e.key === 'd' || e.key === 'в') act('done');
+      else if (e.key === 'ArrowRight') act('skip');
+      else if (e.key === 'ArrowLeft') act('back');
+    };
+    const close = () => { w.remove(); document.removeEventListener('keydown', key, true); changed(); };
+    document.addEventListener('keydown', key, true);
+    w.addEventListener('click', e => {
+      if (e.target === w || e.target.closest('[data-x]')) return close();
+      const s = e.target.closest('[data-s]'); if (s) return act('s:' + s.dataset.s);
+      const t = e.target.closest('[data-t]'); if (t) act(t.dataset.t);
+    });
+    show();
+  }
+  async function suggest(btn) {
+    btn.disabled = true; btn.innerHTML = spin() + 'Думаю…';
+    try {
+      const r = await post('assistant/triage');
+      st.sug = new Map(r.suggestions.map(s => [s.id, s.area]));
+      toast(r.suggestions.length ? `Підказки для ${r.suggestions.length} задач — вони позначені ✦ у списку` : 'Асистент не впевнений щодо жодної — розкладіть вручну');
+      draw();
+    } catch (e) { fail(e); btn.disabled = false; drawInbox(); }
+  }
+  async function acceptAll() {
+    const groups = {};
+    for (const [id, a] of st.sug) (groups[a] = groups[a] || []).push(id);
+    const all = [...st.sug.keys()];
+    try { for (const [a, ids] of Object.entries(groups)) await post('assistant/bulk', { ids, action: 'area', value: a }); } catch (e) { return fail(e); }
+    st.sug.clear();
+    toast(`Розкладено: ${all.length}`, async () => { await post('assistant/bulk', { ids: all, action: 'area', value: 'inbox' }); changed(); });
+    changed();
+  }
+
+  // ---------- події ----------
+  async function onClick(e) {
+    const t = e.target.closest('[data-t]'), a = e.target.closest('[data-a]'), m = e.target.closest('button[data-mode]');
+    const clr = e.target.closest('[data-clear]'), grp = e.target.closest('[data-grp]'), bb = e.target.closest('[data-b]');
+    if (m) { st.mode = m.dataset.mode; pref.set(K('mode'), st.mode); st.sel.clear(); load(); return; }
+    if (clr) { const k = clr.dataset.clear; if (k === 'view') st.view = cfg.view; if (k === 'prio') st.prio = 0; if (k === 'project') st.project = ''; if (k === 'done') st.showDone = false; load(); return; }
+    if (grp) { const k = grp.dataset.grp; st.collapsed.has(k) ? st.collapsed.delete(k) : st.collapsed.add(k); pref.set(K('collapsed'), [...st.collapsed]); drawList(); return; }
+    if (e.target.classList.contains('more')) return load(true);
+    if (bb) {
+      const b = bb.dataset.b;
+      if (b === 'close') { st.selecting = false; st.sel.clear(); return draw(); }
+      if (b === 'all') { const ids = allIds(), on = !ids.every(id => st.sel.has(id)); ids.forEach(id => on ? st.sel.add(id) : st.sel.delete(id)); return draw(); }
+      if (b === 'area') { const v = await menu(bb, openSpaces().map(s => ({ value: s.key, label: s.name, icon: s.icon }))); if (v) bulk('area', v); }
+      if (b === 'status') { const v = await menu(bb, meta.statuses.map(s => ({ value: s.key, label: s.name, icon: STATUS_ICON[s.key] || 'circle' }))); if (v) bulk('status', v); }
+      if (b === 'due') { const v = await menu(bb, [{ value: 'today', label: 'Сьогодні', icon: 'sun' }, { value: 'tomorrow', label: 'Завтра', icon: 'arrowRight' }, { value: 'week', label: 'Наступний понеділок', icon: 'calendar' }, { value: 'none', label: 'Без строку', icon: 'x' }]); if (v) bulk('due', v); }
+      if (b === 'priority') { const v = await menu(bb, [{ value: '0', label: 'Без пріоритету', icon: 'circle' }, { value: '1', label: 'Важлива', icon: 'flag' }, { value: '2', label: 'Термінова', icon: 'flag' }]); if (v != null) bulk('priority', v); }
+      if (b === 'done') bulk('done');
+      if (b === 'delete') bulk('delete');
+      return;
+    }
+    if (t) {
+      const k = t.dataset.t;
+      if (k === 'new') {
+        if (st.mode === 'board') { const col = $('.col:not([data-status="done"]) .col-add', root); if (col) col.click(); }
+        else { const i = $('.qadd-in', root); i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      }
+      if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
+      if (k === 'triage') triage();
+      if (k === 'suggest') suggest(t);
+      if (k === 'accept') acceptAll();
+      if (k === 'ai-add') aiAdd($('.qadd-in', root));
+      if (k === 'sort') { const v = await menu(t, SORTS.map(([v, l]) => ({ value: v, label: l, checked: st.sort === v }))); if (v) { st.sort = v; pref.set(K('sort'), v); load(); } }
+      if (k === 'group') { const v = await menu(t, GROUPS.map(([v, l]) => ({ value: v, label: l, checked: st.group === v }))); if (v) { st.group = v; pref.set(K('group'), v); drawList(); } }
+      if (k === 'filter') {
+        const items = [];
+        if (!fixedView) items.push(...VIEWS.map(([v, l]) => ({ value: 'view:' + v, label: l, icon: 'calendar', checked: st.view === v })), { sep: true });
+        items.push({ value: 'prio:0', label: 'Будь-який пріоритет', icon: 'circle', checked: !st.prio }, { value: 'prio:1', label: 'Важливі й термінові', icon: 'flag', checked: st.prio === 1 },
+                   { value: 'prio:2', label: 'Лише термінові', icon: 'flag', checked: st.prio === 2 });
+        if (meta.projects.length) items.push({ sep: true }, { value: 'project:', label: 'Усі проєкти', icon: 'folder', checked: !st.project },
+          ...meta.projects.map(p => ({ value: 'project:' + p.id, label: p.name, icon: 'folder', checked: String(st.project) === String(p.id), hint: p.open ? String(p.open) : '' })));
+        if (st.mode === 'list') items.push({ sep: true }, { value: 'done', label: st.showDone ? 'Сховати виконані' : 'Показати виконані', icon: 'checkCircle', checked: st.showDone });
+        const v = await menu(t, items, { width: 240 });
+        if (!v) return;
+        if (v.startsWith('view:')) st.view = v.slice(5);
+        else if (v.startsWith('prio:')) st.prio = +v.slice(5);
+        else if (v.startsWith('project:')) st.project = v.slice(8);
+        else if (v === 'done') st.showDone = !st.showDone;
+        load();
+      }
+      return;
+    }
+    if (!a) return;
+    const row = a.closest('[data-id]'), id = row && +row.dataset.id, act = a.dataset.a;
+    if (act === 'open') {
+      if (st.selecting) { e.preventDefault(); toggleSel(id); }
+      return;   // інакше — звичайне посилання на задачу
+    }
+    if (act === 'sel') { toggleSel(id, a.checked); return; }
+    if (act === 'done') {
+      const it = findItem(id); if (!it) return;
+      a.classList.toggle('on');
+      try {
+        const r = await post(`assistant/items/${id}/${it.done ? 'reopen' : 'complete'}`);
+        if (r.next) toast('Наступний раз: ' + fmtDue(r.next));
+        else if (!it.done) toast('Виконано', async () => { await post(`assistant/items/${id}/reopen`); changed(); });
+        changed();
+      } catch (err) { fail(err); a.classList.toggle('on'); }
+      return;
+    }
+    if (act === 'area' || act === 'area-menu') {
+      let v = a.dataset.v;
+      if (act === 'area-menu') v = await menu(a, openSpaces().filter(s => s.key !== 'inbox').map(s => ({ value: s.key, label: s.name, icon: s.icon })));
+      if (!v) return;
+      try {
+        await post('assistant/bulk', { ids: [id], action: 'area', value: v }); st.sug.delete(id);
+        row.classList.add('leaving');
+        toast(`→ ${space(v).name}`, async () => { await post('assistant/bulk', { ids: [id], action: 'area', value: 'inbox' }); changed(); });
+        changed();
+      } catch (err) { fail(err); }
+      return;
+    }
+    if (act === 'col-add') {
+      const col = a.closest('.col'), body = col.querySelector('.col-body');
+      if (body.querySelector('.card-new')) return body.querySelector('.card-new textarea').focus();
+      const f = document.createElement('div'); f.className = 'card card-new';
+      f.innerHTML = '<textarea rows="2" placeholder="Назва задачі… Enter — додати, Esc — скасувати"></textarea>';
+      body.prepend(f); const ta = f.querySelector('textarea'); ta.focus();
+      ta.addEventListener('keydown', async ev => {
+        if (ev.key === 'Escape') { f.remove(); }
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+          ev.preventDefault(); const text = ta.value.trim(); if (!text) return f.remove();
+          ta.disabled = true;
+          try { await quickAdd(text, { status: col.dataset.status }); } catch (err) { fail(err); }
+        }
+      });
+      ta.addEventListener('blur', () => { if (!ta.value.trim()) setTimeout(() => f.remove(), 150); });
+    }
+  }
+  async function onKeyIn(e) {
+    if (e.target.classList.contains('qadd-in') && e.key === 'Enter') {
+      e.preventDefault();
+      const text = e.target.value.trim(); if (!text) return;
+      if (e.ctrlKey || e.metaKey) return aiAdd(e.target);
+      e.target.value = '';
+      try { await quickAdd(text); toast(cfg.area === 'all' ? 'Додано у «Вхідні»' : 'Додано'); } catch (err) { fail(err); e.target.value = text; }
+    }
+  }
+  function onKey(e) {
+    if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-wrap, .pal-wrap, .panel-wrap')) return;
+    if (e.key === 'n' || e.key === 'т' || e.key === 'c' || e.key === 'с') { e.preventDefault(); $('[data-t="new"]', root).click(); }
+    if (e.key === 'b' || e.key === 'и') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); load(); }
+    if (e.key === 'Escape' && st.selecting) { st.selecting = false; st.sel.clear(); draw(); }
+  }
+
+  return { render, destroy, refresh };
+}

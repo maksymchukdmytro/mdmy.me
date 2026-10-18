@@ -86,6 +86,7 @@ Environment=NODE_ENV=production
 Environment=PORT=$PORT
 Environment=HOST=127.0.0.1
 Environment=DATA_DIR=$DATA_DIR
+Environment=PUBLIC_URL=https://$DOMAIN
 ExecStart=$(command -v node) server.js
 Restart=always
 RestartSec=3

@@ -1,0 +1,11 @@
+{
+  "name": "mdmy — задачі й асистент",
+  "short_name": "mdmy",
+  "start_url": "/assistant/#/today",
+  "scope": "/assistant/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#191919",
+  "lang": "uk",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

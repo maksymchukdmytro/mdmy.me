@@ -39,7 +39,9 @@ function serveStatic(req, res, url) {
     const top = rel.split(/[/\\]/)[0];
     const headers = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' };
     if (SECTIONS.includes(top)) {
-      headers['X-Frame-Options'] = 'DENY';
+      // асистент можна відкривати як Telegram Web App (у вебверсії Telegram це iframe); решту — лише напряму
+      if (top === 'assistant') headers['Content-Security-Policy'] = "frame-ancestors 'self' https://web.telegram.org";
+      else headers['X-Frame-Options'] = 'DENY';
       headers['Cache-Control'] = rel.includes('vendor') ? 'public, max-age=604800' : 'no-cache';
     }
     res.writeHead(200, headers);
