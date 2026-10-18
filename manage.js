@@ -5,6 +5,7 @@
 //   npm run account -- list                      список облікових записів
 //   npm run account -- admin <логін>             зробити адміністратором (ключ Claude, модель, бот Telegram)
 //   npm run account -- user <логін>              зняти права адміністратора
+//   npm run account -- demo <логін> <пароль>     гостьовий вхід з окремою демо-базою (пароль може бути простим)
 //   npm run account -- backup <файл.db>          резервна копія бази
 //   npm run account -- import <стара.db>         перенести дані зі старої бази OctoType (один раз, у порожню базу)
 const path = require('path');
@@ -35,6 +36,13 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
     db.prepare('DELETE FROM sessions WHERE account_id = ?').run(a.id);
     audit('account:password', a.login);
     console.log(`Новий пароль для ${a.login}: ${pass}`);
+  } else if (cmd === 'demo') {
+    const l = String(login || '').toLowerCase(), p = rest[0];
+    if (!/^[a-z0-9._-]{3,32}$/.test(l) || !p) return fail('Використання: demo <логін> <пароль>');
+    if (db.prepare('SELECT 1 FROM accounts WHERE login = ?').get(l)) return fail('Такий логін уже є.');
+    DB.createDemo(db, l, 'Гість', p);
+    audit('account:demo', l);
+    console.log(`Гостьовий вхід ${l} створено (окрема демо-база). Демо-дані зʼявляться під час першого входу.`);
   } else if (cmd === 'admin' || cmd === 'user') {
     const a = db.prepare('SELECT * FROM accounts WHERE login = ?').get(String(login || ''));
     if (!a) return fail('Такого логіна немає.');
@@ -45,7 +53,7 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
   } else if (cmd === 'list') {
     const list = db.prepare('SELECT login, name, role, disabled, last_login FROM accounts ORDER BY login').all();
     if (!list.length) console.log('Облікових записів ще немає.');
-    list.forEach(a => console.log(`${a.login.padEnd(20)} ${a.name}${a.role === 'admin' ? '  (адмін)' : ''}${a.disabled ? '  (вимкнено)' : ''}`));
+    list.forEach(a => console.log(`${a.login.padEnd(20)} ${a.name}${a.role === 'admin' ? '  (адмін)' : a.role === 'demo' ? '  (гість, окрема база)' : ''}${a.disabled ? '  (вимкнено)' : ''}`));
   } else if (cmd === 'backup') {
     const out = login || `mdmy-backup-${Date.now()}.db`;
     await db.backup(out);
@@ -65,6 +73,7 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
   npm run account -- list                      список
   npm run account -- admin <логін>             зробити адміністратором
   npm run account -- user <логін>              зняти права адміністратора
+  npm run account -- demo <логін> <пароль>     гостьовий вхід з окремою демо-базою
   npm run account -- backup <файл.db>          резервна копія бази
   npm run account -- import <стара.db>         перенести дані зі старої бази OctoType`);
   }

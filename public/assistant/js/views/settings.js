@@ -70,6 +70,8 @@ export function settingsPage(sub) {
       </section>
       <div class="set-save"><p class="err"></p><button type="button" class="btn primary" data-a="save">Зберегти</button></div>
 
+      <div class="demo-out" hidden><p class="muted">Гостьовий вхід: демо-дані, окремі від інших. Асистент — до 40 запитів на день.</p><button type="button" class="btn sm ghost" data-a="logout">${icon('logout', 14)}Вийти</button></div>
+
       <section class="set" id="set-look">
         <h2>Вигляд</h2>
         <div class="seg theme-seg">${[['system', 'Як у системі'], ['light', 'Світла'], ['dark', 'Темна']].map(([k, l]) => `<button type="button" data-theme="${k}">${l}</button>`).join('')}</div>
@@ -103,6 +105,9 @@ export function settingsPage(sub) {
     s = x;
     const f = k => $(`[data-f="${k}"]`, root);
     ADMIN.forEach(k => { $(`#set-${k}`, root).hidden = !s.admin; $(`.set-nav [data-k="${k}"]`, root).hidden = !s.admin; });
+    // гостьовий вхід: пароль спільний, входи чужі — ці розділи не показуємо
+    if (s.demo) ['devices', 'account'].forEach(k => { $(`#set-${k}`, root).hidden = true; $(`.set-nav [data-k="${k}"]`, root).hidden = true; });
+    $('.demo-out', root).hidden = !s.demo;
     if (document.activeElement !== f('style')) f('style').value = s.style || '';
     const tz = f('tz'); tz.value = s.tz; if (tz.value !== s.tz) { tz.add(new Option(s.tz, s.tz)); tz.value = s.tz; }
     f('morningTime').value = s.morningTime; f('morningOn').checked = s.morningOn;

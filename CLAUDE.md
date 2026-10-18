@@ -21,7 +21,7 @@
   Старі адреси `/speachtotext` → 301 на `/assistant/`.
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
-- `lib/db.js` — схема (PRAGMA user_version, зараз 7): `accounts` (role), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
+- `lib/db.js` — схема (PRAGMA user_version, зараз 8): `accounts` (role, ws), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
   і таблиці асистента `assistant_*`. Нові зміни схеми — новою міграцією з наступним `user_version`.
 - `public/nakladna/` + `lib/nakladna.js` — видаткові накладні: LP-CRM getOrdersByID; короткий номер (напр. 353) шукається через getStatuses + getOrdersIdByStatus
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
@@ -64,6 +64,11 @@
 - Розділ «Щоденні завдання» (у коді — routines / «ритуали») має вкладки «Завдання» (#/rituals) і «Звички» (#/habits).
 - Ролі (міграція v7, `accounts.role`: admin / user): «Асистент» і «Telegram» у налаштуваннях (ключ Claude, модель, бот) бачить і змінює лише admin;
   якщо адміна немає, ним стає найперший обліковий запис (`ensureAdmin` у db.js). `manage.js admin|user <логін>`. Telegram Web App входить як адмін.
+- Окремі бази облікових записів (міграція v8, `accounts.ws`): `DATA_DIR/ws/<ws>/mdmy.db` (+ `media/`) — свої задачі, нотатки, звички, ритуали, push;
+  NULL — основна база власника. `server.js` → `workspace(ws)` створює екземпляр `assistant.make(db, {shared, ws})`: ключ Claude і модель — з основної бази,
+  Telegram-бота немає, токени push з префіксом `u5~`, медіа за `/m/u5/<файл>`. Накладні — лише для основної бази.
+  Гостьовий вхід: роль `demo`, `guest` / `guest` (створює міграція v8 на наявній установці; `manage.js demo <логін> <пароль>`), демо-дані — `lib/demo.js`;
+  без зміни пароля, сесій, накладних і завантаження медіа; асистент і розшифровка — до 40 запитів на день.
 - «Стиль спілкування» (налаштування, `style` в assistant_settings): промпт власника — додається до системного промпту агента (поле reply), ранкового плану й підсумку дня.
 - Логотип: «MDMY» чорним (Inter Display Black, контури) на білому — `public/favicon.svg`, `public/assistant/icon-*.png`, `badge-96.png`, словесний знак `js/logo.js`.
 - Звички (міграція v6, таблиці `habits`, `habit_marks` (habit_id, day, done 1/0)): `lib/habits.js` — серії, місяць для календаря, відмітки (лише сьогодні й минулі дні),

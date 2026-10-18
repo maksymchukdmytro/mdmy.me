@@ -11,7 +11,7 @@
 | Застосунок (Android тощо) | `POST /api/auth/token {login, password, client: "android"}` → `{token, expiresInDays, account}`. Далі — заголовок `Authorization: Bearer <token>` (без `X-MDMY`). |
 | Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Пускає лише власника привʼязаного до асистента бота (підпис `initData` перевіряється токеном бота). |
 
-Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin}`),
+Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin, demo}`; `demo` — гостьовий вхід з окремими демо-даними),
 `GET /api/sessions` — активні входи, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
 Обмеження: 8 спроб входу за 10 хвилин з однієї адреси.
 
