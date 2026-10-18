@@ -8,6 +8,7 @@ import { tasksPage } from './views/tasks.js';
 import { openTask, closeTask, panelOpenId } from './views/panel.js';
 import { notesPage } from './views/notes.js';
 import { ritualsPage } from './views/rituals.js';
+import { habitsPage } from './views/habits.js';
 import { openRitual, closeRitual, ritualOpenId } from './views/ritual-play.js';
 import { recordPage } from './views/record.js';
 import { settingsPage } from './views/settings.js';
@@ -64,7 +65,7 @@ function shell() {
       <a class="side-item" href="#/today" data-r="today">${icon('sun')}<span>Сьогодні</span><b class="n" data-n="today"></b></a>
       <a class="side-item" href="#/upcoming" data-r="upcoming">${icon('upcoming')}<span>Найближчі 7 днів</span></a>
       <a class="side-item" href="#/s/inbox" data-r="s/inbox">${icon('inbox')}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
-      <a class="side-item" href="#/rituals" data-r="rituals">${icon('ritual')}<span>Ритуали</span></a>
+      <a class="side-item" href="#/rituals" data-r="rituals">${icon('ritual')}<span>Щоденні завдання</span></a>
       <a class="side-item" href="#/all" data-r="all">${icon('layers')}<span>Усі задачі</span><b class="n" data-n="all"></b></a>
       <div class="side-label"><span>Простори</span><button class="icon-btn xs" data-act="new-space" title="Новий простір">${icon('plus', 14)}</button></div>
       <div id="sideSpaces"></div>
@@ -127,7 +128,7 @@ function renderCounts() {
 }
 function markActive() {
   const r = currentKey;
-  for (const a of $$('[data-r]')) a.classList.toggle('on', a.dataset.r === r);
+  for (const a of $$('[data-r]')) a.classList.toggle('on', a.dataset.r === r || (a.dataset.r === 'rituals' && r === 'habits'));
 }
 onMeta(() => { renderSideSpaces(); renderStats(); });
 
@@ -160,7 +161,7 @@ function phoneMenu() {
       <a class="m-item add" href="#/settings/spaces">${icon('plus', 20)}<span>Новий простір</span></a>
       <p class="m-label">Ще</p>
       ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
-      ${item('#/rituals', 'ritual', 'Ритуали', 0, 'rituals')}
+      ${item('#/' + pref.get('daily-tab', 'rituals'), 'ritual', 'Щоденні завдання', 0, cur === 'habits' ? 'habits' : 'rituals')}
       ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
       ${item('#/record', 'mic', 'Запис голосом', 0, 'record')}
       ${item('#/settings', 'settings', 'Налаштування', 0, 'settings')}
@@ -182,12 +183,13 @@ function pageFor(key, parts) {
   }
   if (key === 'notes') return notesPage();
   if (key === 'rituals') return ritualsPage(parts[1]);
+  if (key === 'habits') return habitsPage(parts[1]);
   if (key === 'record') return recordPage();
   if (key === 'settings') return settingsPage(parts[1]);
   return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
 }
 const CRUMB = { today: ['sun', 'Сьогодні'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Усі задачі'], notes: ['note', 'Нотатки'],
-                rituals: ['ritual', 'Ритуали'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };
+                rituals: ['ritual', 'Щоденні завдання'], habits: ['ritual', 'Звички'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };
 let currentPage = '', lastPage = '';
 // показати сторінку без зміни адреси (під екраном ритуалу, якщо застосунок відкрили зі сповіщення)
 function mount(key, parts) {
@@ -207,7 +209,7 @@ function route() {
   if (ritualOpenId()) closeRitual();
   lastPage = location.hash;
   // розділи налаштувань — одна сторінка з якорями; редактор ритуалу — окрема
-  const pageKey = key === 'settings' ? 'settings' : key === 'rituals' ? parts.slice(0, 2).join('/') : key;
+  const pageKey = key === 'settings' ? 'settings' : key === 'rituals' || key === 'habits' ? parts.slice(0, 2).join('/') : key;
   if (pageKey !== currentPage || !current) {
     if (current && current.destroy) current.destroy();
     currentPage = pageKey; currentKey = key;
@@ -250,7 +252,7 @@ function palette() {
   const nav = [
     ...['today', 'upcoming', 'all'].map(k => ({ type: 'nav', icon: CRUMB[k][0], label: CRUMB[k][1], href: '#/' + k })),
     ...openSpaces().map(s => ({ type: 'nav', icon: s.icon, label: s.name, href: '#/s/' + s.key })),
-    ...['rituals', 'notes', 'record', 'settings'].map(k => ({ type: 'nav', icon: CRUMB[k][0], label: CRUMB[k][1], href: '#/' + k }))
+    ...['rituals', 'habits', 'notes', 'record', 'settings'].map(k => ({ type: 'nav', icon: CRUMB[k][0], label: CRUMB[k][1], href: '#/' + k }))
   ];
   const draw = () => {
     list.innerHTML = items.length ? items.map((it, i) => `<button type="button" class="pal-item${i === sel ? ' on' : ''}" data-i="${i}">

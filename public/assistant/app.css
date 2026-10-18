@@ -6,7 +6,7 @@
   --line:#ebebea; --line-2:#dcdcd9;
   --hover:rgba(55,53,47,.06); --active:rgba(55,53,47,.1);
   --accent:#191919; --accent-ink:#ffffff;
-  --red:#d44c47; --red-bg:rgba(212,76,71,.09); --amber:#cb912f;
+  --red:#d44c47; --red-bg:rgba(212,76,71,.09); --amber:#cb912f; --green:#2f9e5b; --green-bg:rgba(47,158,91,.12);
   --shadow:0 1px 2px rgba(15,15,15,.04),0 4px 12px rgba(15,15,15,.06);
   --shadow-lg:0 0 0 1px rgba(15,15,15,.05),0 6px 16px rgba(15,15,15,.1),0 18px 48px rgba(15,15,15,.16);
   --scrim:rgba(15,15,15,.35);
@@ -21,7 +21,7 @@
   --line:#2f2f2f; --line-2:#3a3a3a;
   --hover:rgba(255,255,255,.055); --active:rgba(255,255,255,.09);
   --accent:#e9e9e7; --accent-ink:#191919;
-  --red:#eb5757; --red-bg:rgba(235,87,87,.12); --amber:#e0a43c;
+  --red:#eb5757; --red-bg:rgba(235,87,87,.12); --amber:#e0a43c; --green:#3dbb6f; --green-bg:rgba(61,187,111,.15);
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.25);
   --shadow-lg:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.5);
   --scrim:rgba(0,0,0,.55); color-scheme:dark;
@@ -32,7 +32,7 @@
   --line:#2f2f2f; --line-2:#3a3a3a;
   --hover:rgba(255,255,255,.055); --active:rgba(255,255,255,.09);
   --accent:#e9e9e7; --accent-ink:#191919;
-  --red:#eb5757; --red-bg:rgba(235,87,87,.12); --amber:#e0a43c;
+  --red:#eb5757; --red-bg:rgba(235,87,87,.12); --amber:#e0a43c; --green:#3dbb6f; --green-bg:rgba(61,187,111,.15);
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.25);
   --shadow-lg:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.5);
   --scrim:rgba(0,0,0,.55); color-scheme:dark;
@@ -690,6 +690,79 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .dc-next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14.5px}
 .dc-late{display:inline-flex;align-self:flex-start;padding:1px 8px;border-radius:999px;background:var(--red);color:#fff;font-size:12px;font-weight:600}
 @media (min-width:900px){.day-card{max-width:560px}}
+
+/* ---------- щоденні завдання: вкладки ---------- */
+.daily-tabs{display:flex;margin:0 0 14px;width:100%;max-width:420px}
+.daily-tabs a{flex:1;text-align:center;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:500;color:var(--text-2);font-size:14.5px}
+.daily-tabs a[aria-checked="true"]{background:var(--bg);color:var(--text);box-shadow:var(--shadow)}
+
+/* ---------- звички ---------- */
+.h-list{display:flex;flex-direction:column;gap:8px;max-width:720px}
+.h-card{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:14px;padding:6px 10px 6px 6px;background:var(--card);animation:rowIn .36s var(--ease) both}
+.h-card.off{opacity:.55}
+.h-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:6px;text-decoration:none}
+.h-txt{min-width:0;display:flex;flex-direction:column;gap:3px}
+.h-txt b{font-weight:600;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-txt small{color:var(--text-2);font-size:13px}
+.h-week{display:flex;gap:4px;margin-top:2px}
+.h-week i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);color:#fff}
+.h-week i.ok{background:var(--green);border-color:var(--green)}
+.h-week i.no{background:var(--text);border-color:var(--text);color:var(--bg)}
+.h-week i.np{border-style:dashed;opacity:.45}
+.h-week i .ic{width:11px;height:11px;stroke-width:2.6}
+.h-today{flex:none;display:grid;place-items:center;width:48px;height:48px;padding:0;border-radius:50%;border:2px solid var(--line-2);background:transparent;color:var(--text-3);transition:background .15s,border-color .15s,color .15s,transform .15s var(--spring)}
+.h-today.ok{background:var(--green);border-color:var(--green);color:#fff}
+.h-today.no{background:var(--text);border-color:var(--text);color:var(--bg)}
+.h-today .ic{stroke-width:2.4}
+.pop{animation:chkPop .38s var(--spring)}
+.h-rest{flex:none;color:var(--text-3);font-size:12.5px;padding:0 6px}
+.h-evening{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:18px;padding:12px 14px;border-radius:12px;background:var(--bg-2);color:var(--text-2);font-size:14px;max-width:720px}
+.h-evening .switch span{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+.h-evening small{width:100%;color:var(--text-3);font-size:12.5px}
+.h-time{width:auto;min-height:36px}
+.h-new{display:flex;flex-direction:column;gap:12px;padding:0 8px 8px}
+.h-new input{min-height:48px;font-size:16px}.h-new .btn{height:46px;font-size:15px}
+.h-emojis{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.h-emo{aspect-ratio:1;border-radius:12px;border:1.5px solid transparent;background:var(--bg-2);font-size:22px;padding:0}
+.h-emo.on{border-color:var(--text);background:var(--bg)}
+.h-page .r-title textarea{font-size:24px}
+.h-body{max-width:640px}
+.h-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 16px}
+.h-stats div{display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:14px;background:var(--bg-2)}
+.h-stats b{font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.h-stats small{color:var(--text-2);font-size:12px;line-height:1.3}
+.h-cal{border:1px solid var(--line);border-radius:16px;padding:10px 10px 12px}
+.h-cal header{display:flex;align-items:center;justify-content:space-between;padding:0 2px 8px}
+.h-cal header b{font-size:15.5px}
+.h-cal header .icon-btn{width:36px;height:36px}
+.h-cal header .icon-btn:disabled{opacity:.3}
+.h-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.h-wd{text-align:center;font-size:11.5px;color:var(--text-3);font-weight:600;padding:2px 0 4px}
+.h-day{position:relative;aspect-ratio:1;display:grid;place-items:center;border:0;border-radius:12px;background:transparent;padding:0;font-size:14px;font-variant-numeric:tabular-nums;color:var(--text)}
+.h-day>span{position:relative;z-index:1}
+.h-day.np,.h-day.fut,.h-day.before{color:var(--text-3)}
+.h-day.today{box-shadow:inset 0 0 0 1.5px var(--text)}
+.h-day.ok,.h-day.no{color:transparent}
+.h-day i{position:absolute;inset:4px;display:grid;place-items:center;border-radius:50%;animation:markIn .3s var(--spring)}
+.h-day.ok i{background:var(--green);color:#fff}
+.h-day.no i{background:var(--text);color:var(--bg)}
+.h-day i .ic{width:18px;height:18px;stroke-width:2.6}
+.h-day:disabled{cursor:default}
+@keyframes markIn{from{transform:scale(.4);opacity:0}}
+.h-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 4px 0;font-size:12.5px;color:var(--text-2)}
+.h-legend span{display:inline-flex;align-items:center;gap:6px}
+.h-legend i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;color:#fff}
+.h-legend i.ok{background:var(--green)}.h-legend i.no{background:var(--text);color:var(--bg)}
+.h-legend i .ic{width:11px;height:11px;stroke-width:2.6}
+.h-check{display:flex;flex-direction:column;gap:4px;padding:0 6px 6px}
+.h-q{display:flex;align-items:center;gap:12px;padding:8px 4px}
+.h-q b{flex:1;font-weight:600;font-size:15.5px}
+.h-q .r-emoji{width:40px;height:40px;font-size:20px}
+.h-yn{display:flex;gap:6px}
+.h-yn button{display:inline-flex;align-items:center;gap:5px;height:40px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line-2);background:transparent;font-size:14px;font-weight:500;color:var(--text-2)}
+.h-yn button.ok{background:var(--green);border-color:var(--green);color:#fff}
+.h-yn button.no{background:var(--text);border-color:var(--text);color:var(--bg)}
+.h-done{height:48px;margin-top:10px;font-size:15px}
 
 /* ---------- кнопка «+» і нова задача на весь екран ---------- */
 .fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:36;width:58px;height:58px;padding:0;border-radius:50%;border:0;display:grid;place-items:center;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(15,15,15,.22),0 2px 6px rgba(15,15,15,.12);transition:transform .18s var(--spring),opacity .2s;animation:fabIn .45s var(--spring) both .1s}

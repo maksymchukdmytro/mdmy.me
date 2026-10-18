@@ -61,6 +61,7 @@ async function api(req, res, url) {
   if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);
   if (url.startsWith('/api/assistant/')) return assistant.handle(req, res, url, a, auth.log);
   if (url === '/api/routines' || url.startsWith('/api/routines/')) return assistant.routines.handle(req, res, url);
+  if (url === '/api/habits' || url.startsWith('/api/habits/')) return assistant.habits.handle(req, res, url);
   if (url.startsWith('/api/push/')) return push.handle(req, res, url, a);
   return send(res, 404, { error: 'Не знайдено.' });
 }

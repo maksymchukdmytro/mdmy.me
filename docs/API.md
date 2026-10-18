@@ -98,6 +98,18 @@
 | `POST /api/routines/media` | Сирі байти файлу з `Content-Type` (JPEG, PNG, WebP, GIF, MP4, WebM, MOV; до 60 МБ) → `{url, type}` |
 | `GET /m/<імʼя>` | Сам файл (без входу, з Range) |
 
+## Звички (`/api/habits/…`)
+
+| Метод і шлях | Що робить |
+|---|---|
+| `GET /api/habits` | `{list, today, time, on}`; звичка: `{id, title, icon, why, days, ask, active, start, todayPlanned, today: 1·0·null, week[7] {day, planned, mark}, streak, best}` |
+| `POST /api/habits` | Створити `{title, icon?, why?, days?, ask?}` |
+| `GET /api/habits/:id?month=YYYY-MM` | Звичка + `month {days[{day, planned, mark, future}], planned, done, missed}` |
+| `PATCH / DELETE /api/habits/:id` | Змінити / видалити (разом з історією) |
+| `POST /api/habits/:id/mark {day, done}` | `done`: true ✓, false ✗, null — прибрати відмітку; лише сьогодні й минулі дні |
+| `POST /api/habits/settings {time, on}` | Час вечірнього питання (за замовчуванням 22:00) |
+| `POST /api/habits/ask` | Надіслати вечірнє питання зараз |
+
 ## Push-сповіщення (Web Push)
 
 | Метод і шлях | Що робить |

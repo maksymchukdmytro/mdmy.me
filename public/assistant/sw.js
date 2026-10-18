@@ -10,7 +10,7 @@ self.addEventListener('push', e => {
     body: d.body || '',
     tag: d.tag || undefined,
     renotify: !!d.tag,
-    requireInteraction: d.kind === 'reminder' || d.kind === 'routine',      // висить, доки не відреагуєш
+    requireInteraction: d.kind === 'reminder' || d.kind === 'routine' || d.kind === 'habits',      // висить, доки не відреагуєш
     image: d.image || undefined,                    // ритуал: фото вправи великим планом (Android)
     icon: '/assistant/icon-192.png',
     badge: '/assistant/badge-96.png',

@@ -3,7 +3,7 @@
 // Сервер — lib/routines.js, API /api/routines/*. Екран виконання — ritual-play.js (#/r/<id>).
 import { api, get, post, patch, del, authHeaders } from '../api.js';
 import { icon } from '../icons.js';
-import { $, $$, esc, toast, fail, confirmBox, debounce, sheet, menu } from '../ui.js';
+import { $, $$, esc, toast, fail, confirmBox, debounce, sheet, menu, pref } from '../ui.js';
 import { go } from '../nav.js';
 import { builtinName, mediaThumb } from './ritual-play.js';
 
@@ -13,6 +13,8 @@ const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
 
 export function ritualsPage(id) { return id ? editorPage(id) : listPage(); }
+// вкладки розділу «Щоденні завдання»: завдання з нагадуваннями й формування звичок
+export const dailyTabs = on => `<nav class="seg daily-tabs" aria-label="Розділ"><a href="#/rituals" aria-checked="${on === 'rituals'}">Завдання</a><a href="#/habits" aria-checked="${on === 'habits'}">Звички</a></nav>`;
 
 // ---------- прогрес за сьогодні: крапки ----------
 function dots(r) {
@@ -31,7 +33,8 @@ function listPage() {
   let root, data = null;
   async function render(el) {
     root = el;
-    root.innerHTML = `<div class="page rituals-page"><div class="page-head"><h1 class="page-title">Ритуали</h1></div><div class="r-list"><span class="spin"></span></div></div>`;
+    pref.set('daily-tab', 'rituals');
+    root.innerHTML = `<div class="page rituals-page"><div class="page-head"><h1 class="page-title">Щоденні завдання</h1></div>${dailyTabs('rituals')}<div class="r-list"><span class="spin"></span></div></div>`;
     root.addEventListener('click', onClick);
     load();
   }
@@ -50,7 +53,7 @@ function listPage() {
         <button type="button" class="r-play" data-play="${r.id}" aria-label="Виконати зараз">${icon('play', 18)}</button>
       </article>`).join('')
       : `<div class="empty r-empty"><p>Короткі справи, які повторюються щодня: вода, зарядка, очі.<br>Приходять сповіщенням — з фото, відео й таймером.</p></div>`) +
-      `<button type="button" class="btn primary r-new" data-new>${icon('plus', 16)}Новий ритуал</button>`;
+      `<button type="button" class="btn primary r-new" data-new>${icon('plus', 16)}Нове завдання</button>`;
   }
   async function onClick(e) {
     const p = e.target.closest('[data-play]'); if (p) return go('#/r/' + p.dataset.play);
@@ -61,15 +64,15 @@ function listPage() {
 
 // Новий: готовий шаблон або свій
 function pickTemplate(templates) {
-  const s = sheet(`<div class="sheet-head"><b>Новий ритуал</b></div>
+  const s = sheet(`<div class="sheet-head"><b>Нове щоденне завдання</b></div>
     <div class="tpl-list">${templates.map(t => `<button type="button" class="tpl" data-t="${t.key}"><span class="r-emoji">${esc(t.icon)}</span><span><b>${esc(t.title)}</b><small>${esc(t.body)}</small></span></button>`).join('')}
-      <button type="button" class="tpl" data-t=""><span class="r-emoji">✨</span><span><b>Свій ритуал</b><small>Назва, фото чи відео, кроки й час — як тобі треба</small></span></button></div>`,
-    { cls: 'tpl-sheet', label: 'Новий ритуал' });
+      <button type="button" class="tpl" data-t=""><span class="r-emoji">✨</span><span><b>Своє завдання</b><small>Назва, фото чи відео, кроки й час — як тобі треба</small></span></button></div>`,
+    { cls: 'tpl-sheet', label: 'Нове щоденне завдання' });
   s.el.addEventListener('click', async e => {
     const b = e.target.closest('[data-t]'); if (!b) return;
     b.disabled = true;
     try {
-      const r = await post('routines', b.dataset.t ? { template: b.dataset.t } : { title: 'Новий ритуал', icon: '✨', times: ['09:00'] });
+      const r = await post('routines', b.dataset.t ? { template: b.dataset.t } : { title: 'Нове завдання', icon: '✨', times: ['09:00'] });
       s.close(); changed(); go('#/rituals/' + r.id);
     } catch (err) { fail(err); b.disabled = false; }
   });
@@ -82,7 +85,7 @@ function editorPage(id) {
 
   async function render(el) {
     root = el;
-    root.innerHTML = `<div class="page r-edit"><a class="back" href="#/rituals">${icon('chevronLeft', 18)}Ритуали</a><div class="r-form"><span class="spin"></span></div></div>`;
+    root.innerHTML = `<div class="page r-edit"><a class="back" href="#/rituals">${icon('chevronLeft', 18)}Щоденні завдання</a><div class="r-form"><span class="spin"></span></div></div>`;
     try { r = await get('routines/' + id); } catch (e) { $('.r-form', root).innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
     mode = r.times.length ? 'times' : 'every';
     draw();
@@ -210,7 +213,7 @@ function editorPage(id) {
     if (a === 'play') return go('#/r/' + id);
     if (a === 'send') { try { const x = await post(`routines/${id}/send`); toast(x.text); } catch (err) { fail(err); } return; }
     if (a === 'delete') {
-      if (!await confirmBox(`Видалити ритуал «${r.title}»?`)) return;
+      if (!await confirmBox(`Видалити «${r.title}»?`)) return;
       try { await del('routines/' + id); changed(); toast('Видалено'); go('#/rituals'); } catch (err) { fail(err); }
     }
   }

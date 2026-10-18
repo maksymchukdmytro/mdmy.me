@@ -50,7 +50,7 @@ export function closeRitual() {
 export async function openRitual(id, onClose) {
   closeRitual();
   const el = document.createElement('div'); el.className = 'rp-wrap';
-  el.innerHTML = '<div class="rp" role="dialog" aria-modal="true" aria-label="Ритуал"><div class="rp-load"><span class="spin"></span></div></div>';
+  el.innerHTML = '<div class="rp" role="dialog" aria-modal="true" aria-label="Щоденне завдання"><div class="rp-load"><span class="spin"></span></div></div>';
   document.body.append(el);
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
   const c = cur = { id, el, onClose, step: -1, left: 0, timer: 0, breath: 0, running: false };
