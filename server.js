@@ -102,6 +102,7 @@ function uploadBlocked(a, req, url, res) {
 }
 
 function blocked(a, req, url) {
+  if (a.role === 'nakladna' && !url.startsWith('/api/nakladna/')) return 'Цей обліковий запис — лише для накладних.';
   if (url.startsWith('/api/nakladna/') && a.ws) return 'Накладні доступні лише власнику.';
   if (!a.ws) return null;
   if (a.role === 'demo' && url === '/api/routines/media' && req.method === 'POST') return 'У гостьовому вході завантаження фото й відео вимкнено.';
@@ -269,7 +270,7 @@ async function api(req, res, url) {
   const a = await auth.handle(req, res, url);
   if (!a) return;                                            // відповідь уже надіслано (вхід, вихід, помилка доступу)
   const no = blocked(a, req, url);
-  if (no) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: no });
+  if (no) return send(res, a.role !== 'nakladna' && (url.startsWith('/api/assistant/') || url.startsWith('/api/stt/')) ? 429 : 403, { error: no });
   const full = uploadBlocked(a, req, url, res);
   if (full) { req.resume(); return send(res, 413, { error: full }); }
   if (url === '/api/account/quota' && req.method === 'GET') return send(res, 200, { quota: quotaView(a) });

@@ -216,10 +216,10 @@ export function settingsPage(sub) {
   }
   async function loadUsers() {
     let r; try { r = await get('admin/users'); } catch (e) { return; }
-    const ROLE = { admin: 'адмін', demo: 'гість', user: '' };
+    const ROLE = { admin: 'адмін', demo: 'гість', user: '', nakladna: 'лише накладні' };
     users = r.list;
     $('.users-list', root).innerHTML = r.list.map(u => `<div class="sess${u.disabled ? ' off' : ''}">${icon(u.google ? 'checkCircle' : 'circle', 16)}<span><b>${esc(u.name)}</b> <span class="muted small">${esc(u.email || u.login)}${ROLE[u.role] ? ' · ' + ROLE[u.role] : ''}${u.disabled ? ' · вимкнено' : ''}</span>
-        ${!u.ws && u.role !== 'admin' ? '<span class="small u-warn">спільна база з вами — бачить ваші записи</span>' : ''}</span>
+        ${!u.ws && u.role !== 'admin' && u.role !== 'nakladna' ? '<span class="small u-warn">спільна база з вами — бачить ваші записи</span>' : ''}</span>
       <span class="muted small">${u.last_login ? 'вхід ' + esc(fmtDate(u.last_login)) : 'з ' + esc(fmtDate(u.created))}</span>
       ${u.role !== 'admin' ? `<button type="button" class="icon-btn xs" data-a="user-more" data-id="${u.id}" title="Дії">${icon('more', 14)}</button>` : ''}</div>`).join('') + `<p class="muted small">Усього: ${r.list.length}</p>`;
   }
@@ -349,7 +349,7 @@ export function settingsPage(sub) {
     if (k === 'user-more') {
       const u = users.find(x => x.id === +a.dataset.id); if (!u) return;
       const items = [];
-      if (!u.ws) items.push({ value: 'separate', label: 'Дати окрему базу', icon: 'layers' });
+      if (!u.ws && u.role !== 'nakladna') items.push({ value: 'separate', label: 'Дати окрему базу', icon: 'layers' });
       items.push(u.disabled ? { value: 'enable', label: 'Увімкнути вхід', icon: 'check' } : { value: 'disable', label: 'Вимкнути вхід', icon: 'x' });
       if (u.ws && u.role !== 'demo') items.push({ sep: true }, { value: 'delete', label: 'Видалити з даними', icon: 'trash', danger: true });
       const v = await menu(a, items); if (!v) return;

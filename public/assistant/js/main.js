@@ -322,6 +322,7 @@ async function boot() {
     if (telegramInitData() && await telegramLogin()) { try { account = (await api('me')).account; } catch (e2) {} }
     if (!account) return showLogin();
   }
+  if (account.only === 'nakladna') return location.replace('/nakladna/');   // обліковий запис лише для накладних
   try { await refreshMeta(); } catch (e) { toast(e.message); }
   if (/tgWebAppData=/.test(location.hash)) history.replaceState(null, '', location.pathname + '#/today');
   current = null; currentKey = ''; currentPage = '';

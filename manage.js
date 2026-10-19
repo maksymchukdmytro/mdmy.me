@@ -56,7 +56,7 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
   } else if (cmd === 'list') {
     const list = db.prepare('SELECT login, name, role, disabled, last_login FROM accounts ORDER BY login').all();
     if (!list.length) console.log('Облікових записів ще немає.');
-    list.forEach(a => console.log(`${a.login.padEnd(20)} ${a.name}${a.role === 'admin' ? '  (адмін)' : a.role === 'demo' ? '  (гість, окрема база)' : ''}${a.disabled ? '  (вимкнено)' : ''}`));
+    list.forEach(a => console.log(`${a.login.padEnd(20)} ${a.name}${a.role === 'admin' ? '  (адмін)' : a.role === 'demo' ? '  (гість, окрема база)' : a.role === 'nakladna' ? '  (лише накладні)' : ''}${a.disabled ? '  (вимкнено)' : ''}`));
   } else if (cmd === 'backup') {
     // VACUUM INTO: копія зашифрована тим самим ключем, що й база (резервний API SQLite з шифруванням не працює)
     const fs = require('fs'), q = f => `'${path.resolve(f).replace(/'/g, "''")}'`;
