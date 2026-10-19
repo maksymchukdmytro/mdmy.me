@@ -15,6 +15,9 @@ const VIEWS = [['open', 'Будь-коли'], ['today', 'Сьогодні й п�
 const SORTS = [['smart', 'За строком'], ['prio', 'За пріоритетом'], ['created', 'Спершу нові'], ['alpha', 'За алфавітом'], ['manual', 'Вручну (як на дошці)']];
 const GROUPS = [['date', 'За строком'], ['status', 'За статусом'], ['space', 'За простором'], ['none', 'Без груп']];
 const TOD = { late: 'Прострочене', morning: 'Зранку', day: 'Вдень', evening: 'Увечері', nodate: 'Без часу' };
+// перетягування чипа простору (одне на всю сторінку); поки палець веде чип — сторінка й рядок не прокручуються
+let spDrag = null;
+document.addEventListener('touchmove', e => { if (spDrag && spDrag.on) e.preventDefault(); }, { passive: false });
 
 export function tasksPage(cfg) {
   const K = k => `tasks:${cfg.key}:${k}`;
@@ -96,71 +99,85 @@ export function tasksPage(cfg) {
     drawSpaces();
   }
   function drawSpaces() {
-    const box = $('.spchips', root); if (!box) return;
+    const box = $('.spchips', root); if (!box || spDrag) return;            // під час перетягування рядок не перемальовуємо
     const n = k => cfg.view === 'open' ? (k ? meta.counts.spaces[k] || 0 : meta.counts.all) : null;
     const chip = (k, label, sp) => `<button type="button" class="spchip" data-space="${k}" role="tab" aria-selected="${st.space === k}">${sp ? spIcon(sp, 14) : ''}<span>${esc(label)}</span>${n(k) != null ? `<b>${n(k)}</b>` : ''}</button>`;
     box.innerHTML = chip('', 'Усі') + openSpaces().map(sp => chip(sp.key, sp.name, sp)).join('');
     if (!box.dataset.dnd) { box.dataset.dnd = '1'; spacesDnd(box); }
   }
   // Порядок просторів — перетягуванням чипів: мишею одразу, пальцем — утримати й вести (щоб не заважати прокрутці рядка).
+  // Під пальцем — «привид» чипа (position: fixed), сам чип лишається в рядку блідою заглушкою й пересувається на нове місце.
+  // Події — на document (чип не губить їх, навіть якщо рядок прокручується), перемальовування рядка під час перетягування вимкнене.
   // Новий порядок зберігається для всіх розділів (бічна панель, меню, групи «За простором»).
   function spacesDnd(box) {
-    let d = null, suppress = false;
+    let suppress = false;
     const chips = () => [...box.querySelectorAll('.spchip[data-space]:not([data-space=""])')];
     box.addEventListener('pointerdown', e => {
-      const c = e.target.closest('.spchip'); if (!c || !c.dataset.space || e.button > 0) return;
-      d = { c, id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, touch: e.pointerType !== 'mouse' };
-      if (d.touch) d.t = setTimeout(() => begin(e.clientX), 320);
+      const c = e.target.closest('.spchip'); if (!c || !c.dataset.space || e.button > 0 || spDrag) return;
+      spDrag = { c, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, on: false, touch: e.pointerType !== 'mouse' };
+      if (spDrag.touch) spDrag.t = setTimeout(() => begin(), 300);
+      document.addEventListener('pointermove', move, { passive: false });
+      document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
     });
-    const begin = x => {
-      if (!d || d.on) return;
-      d.on = true; d.dx = x - d.c.getBoundingClientRect().left;
-      d.c.classList.add('drag'); box.classList.add('dragging');
-      try { d.c.setPointerCapture(d.id); } catch (er) {}
+    function begin() {
+      const d = spDrag; if (!d || d.on) return;
+      d.on = true;
+      const r = d.c.getBoundingClientRect();
+      d.left = r.left; d.w = r.width;
+      d.ghost = d.c.cloneNode(true); d.ghost.classList.add('sp-ghost');
+      Object.assign(d.ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px' });
+      document.body.append(d.ghost);
+      d.c.classList.add('ph'); box.classList.add('dragging');
+      place(d.x);
       if (navigator.vibrate) navigator.vibrate(10);
-    };
-    box.addEventListener('pointermove', e => {
-      if (!d || e.pointerId !== d.id) return;
+    }
+    function place(x) {
+      const d = spDrag;
+      const br = box.getBoundingClientRect();
+      // привид іде за пальцем, але не виходить за межі рядка
+      const dx = Math.min(Math.max(x - d.x0, br.left - d.left), br.right - d.left - d.w);
+      d.ghost.style.transform = `translateX(${dx}px)`;
+      // місце в рядку: перед першим чипом, середина якого правіше за палець
+      const after = chips().filter(c => c !== d.c).find(c => { const r = c.getBoundingClientRect(); return x < r.left + r.width / 2; });
+      if (after ? d.c.nextElementSibling !== after : box.lastElementChild !== d.c) box.insertBefore(d.c, after || null);
+      // біля краю — підкручуємо рядок
+      cancelAnimationFrame(d.raf);
+      const edge = x < br.left + 28 ? -6 : x > br.right - 28 ? 6 : 0;
+      if (edge) { const step = () => { if (spDrag !== d) return; box.scrollLeft += edge; d.raf = requestAnimationFrame(step); }; d.raf = requestAnimationFrame(step); }
+    }
+    function move(e) {
+      const d = spDrag; if (!d || e.pointerId !== d.id) return;
+      d.x = e.clientX;
       if (!d.on) {
         const mx = Math.abs(e.clientX - d.x0), my = Math.abs(e.clientY - d.y0);
-        if (d.touch) { if (mx > 8 || my > 8) { clearTimeout(d.t); d = null; } return; }   // палець рушив раніше — це прокрутка
-        if (mx > 5) begin(e.clientX); else return;
+        if (d.touch) { if (mx > 8 || my > 8) stop(); return; }    // палець рушив до утримання — це прокрутка рядка
+        if (mx > 5) begin(); else return;
       }
       e.preventDefault();
-      d.c.style.transform = `translateX(${e.clientX - d.x0}px)`;
-      // переставляємо в DOM, коли палець перейшов середину сусіда
-      const others = chips().filter(x => x !== d.c);
-      const after = others.find(x => { const r = x.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
-      const before = d.c.nextElementSibling, x0 = d.c.getBoundingClientRect().left;
-      if (after) { if (after !== d.c.nextElementSibling) box.insertBefore(d.c, after); }
-      else if (box.lastElementChild !== d.c) box.append(d.c);
-      if (d.c.nextElementSibling !== before) { const moved = d.c.getBoundingClientRect().left - x0; d.x0 += moved; d.c.style.transform = `translateX(${e.clientX - d.x0}px)`; }
-      // край рядка — підкручуємо
-      const br = box.getBoundingClientRect();
-      if (e.clientX < br.left + 30) box.scrollLeft -= 8; else if (e.clientX > br.right - 30) box.scrollLeft += 8;
-    });
-    const end = async e => {
-      if (!d || (e && e.pointerId !== d.id)) return;
-      clearTimeout(d.t);
-      const was = d; d = null;
-      if (!was.on) return;
-      suppress = true; setTimeout(() => { suppress = false; }, 50);
-      was.c.classList.remove('drag'); was.c.style.transform = ''; box.classList.remove('dragging');
-      const order = chips().map(x => x.dataset.space), cur = openSpaces().map(x => x.key);
-      if (order.join() === cur.join()) return;
+      place(e.clientX);
+    }
+    function stop() {
+      const d = spDrag; spDrag = null; if (!d) return null;
+      clearTimeout(d.t); cancelAnimationFrame(d.raf);
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', end); document.removeEventListener('pointercancel', end);
+      if (d.ghost) d.ghost.remove();
+      d.c.classList.remove('ph'); box.classList.remove('dragging');
+      return d;
+    }
+    async function end(e) {
+      if (!spDrag || (e && e.pointerId !== spDrag.id)) return;
+      const d = stop(); if (!d || !d.on) return;
+      suppress = true; setTimeout(() => { suppress = false; }, 60);
+      const order = chips().map(x => x.dataset.space), list = openSpaces();
+      if (order.join() === list.map(x => x.key).join()) return;
       try {
-        const list = openSpaces();
         await Promise.all(order.map((k, i) => (list.find(x => x.key === k) || {}).position !== i + 1 ? api('assistant/spaces/' + k, { method: 'PATCH', json: { position: i + 1 } }) : null));
         await refreshMeta();
         toast('Порядок просторів збережено');
       } catch (er) { fail(er); drawSpaces(); }
-    };
-    box.addEventListener('pointerup', end);
-    box.addEventListener('pointercancel', end);
+    }
     box.addEventListener('click', e => { if (suppress) { e.stopPropagation(); e.preventDefault(); } }, true);
     box.addEventListener('contextmenu', e => { if (e.target.closest('.spchip')) e.preventDefault(); });
-    // пальцем: коли перетягування почалось, рядок не прокручується
-    box.addEventListener('touchmove', e => { if (d && d.on) e.preventDefault(); }, { passive: false });
   }
 
   // ---------- завантаження ----------

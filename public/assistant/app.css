@@ -170,9 +170,11 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .spchip[aria-selected="true"] b{color:inherit;opacity:.65}
 .spchip:active{transform:scale(.96)}
 .spchip{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.spchip.drag{position:relative;z-index:2;box-shadow:var(--shadow-lg);cursor:grabbing;transition:none;background:var(--bg)}
-.spchip.drag[aria-selected="true"]{background:var(--accent)}
+.spchip.ph{opacity:.35;border-style:dashed}
+.spchip.ph:active{transform:none}
+.spchip.sp-ghost{position:fixed;z-index:900;margin:0;pointer-events:none;box-shadow:var(--shadow-lg);cursor:grabbing;transition:none;scale:1.04}
 .spchips.dragging{overflow-x:hidden}
+body:has(.sp-ghost){cursor:grabbing}
 @media (hover:hover){.spchip[data-space]:not([data-space=""]){cursor:grab}}
 @media (max-width:899px){.spchip{height:36px;padding:0 14px;font-size:14.5px}}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
