@@ -60,7 +60,7 @@
 | `POST items/:id/complete`, `POST items/:id/reopen` | Виконати / повернути |
 | `POST bulk` | Масово: `{ids[], action: done · reopen · delete · area · status · priority · due, value}`; `due`: `today` · `tomorrow` · `week` · `none` |
 | `POST triage` | Підказки Claude для задач у «Вхідних»: `{suggestions: [{id, area}]}` (нічого не змінює) |
-| `GET spaces`, `POST spaces`, `PATCH spaces/:key`, `DELETE spaces/:key` | Простори. Видалення власного простору повертає його задачі у «Вхідні» |
+| `GET spaces`, `POST spaces`, `PATCH spaces/:key`, `DELETE spaces/:key` | Простори `{key, name, icon, color, description, position, archived}`; `color` — gray / blue / green / orange / purple / pink / teal / amber. Видалення власного простору повертає його задачі у «Вхідні» |
 | `GET statuses` | Статуси |
 | `GET notes?q` | Нотатки (`q` — пошук або `#тег`) |
 | `GET search?q` | Пошук по всьому, що сказано асистенту, і по записах |

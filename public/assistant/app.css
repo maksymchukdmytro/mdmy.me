@@ -169,6 +169,11 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .spchip[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .spchip[aria-selected="true"] b{color:inherit;opacity:.65}
 .spchip:active{transform:scale(.96)}
+.spchip{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.spchip.drag{position:relative;z-index:2;box-shadow:var(--shadow-lg);cursor:grabbing;transition:none;background:var(--bg)}
+.spchip.drag[aria-selected="true"]{background:var(--accent)}
+.spchips.dragging{overflow-x:hidden}
+@media (hover:hover){.spchip[data-space]:not([data-space=""]){cursor:grab}}
 @media (max-width:899px){.spchip{height:36px;padding:0 14px;font-size:14.5px}}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .fchips:empty{display:none}
@@ -894,6 +899,8 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .cmp-mic{--lv:0;position:relative;display:grid;place-items:center;width:78px;height:78px;padding:0;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);
          box-shadow:0 10px 26px rgba(15,15,15,.22),0 0 0 calc(var(--lv) * 18px) var(--active);transition:background .15s,transform .15s var(--spring),box-shadow .08s}
 .cmp-mic:active{transform:scale(.93)}
+.cmp-mic{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.cmp-mic.hold{transform:scale(1.08)}
 .cmp-mic.on{background:var(--red);color:#fff;box-shadow:0 10px 26px rgba(212,76,71,.35),0 0 0 calc(var(--lv) * 22px) var(--red-bg)}
 .cmp-mic.on .ic{display:none}
 .cmp-stop{display:none;width:24px;height:24px;border-radius:6px;background:#fff}
@@ -1278,3 +1285,34 @@ body.dnd-on .fab{transform:scale(0);opacity:0}
 .home-card .hc-main>.ic:last-child{flex:none;color:var(--text-3)}
 .home-card[hidden]{display:none}
 .team-card{animation:rowIn .3s var(--ease)}
+
+/* ---------- кольорові акценти ----------
+   Палітра просторів (світла / темна), колір простору — на значку; пріоритет — на кружечку задачі; прогрес дня — зелений;
+   акцентний колір застосунку на вибір (Налаштування → Вигляд), за замовчуванням — чорний. */
+:root{--c-gray:#8a8984;--c-blue:#2f6fed;--c-green:#2f9e5b;--c-orange:#e07b29;--c-purple:#8b5cf6;--c-pink:#d9468f;--c-teal:#138f9e;--c-amber:#c08a1e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--c-gray:#9b9a97;--c-blue:#5b8def;--c-green:#3dbb6f;--c-orange:#f0954a;--c-purple:#a78bfa;--c-pink:#ec6fae;--c-teal:#2bb3c2;--c-amber:#e0a43c}}
+:root[data-theme="dark"]{--c-gray:#9b9a97;--c-blue:#5b8def;--c-green:#3dbb6f;--c-orange:#f0954a;--c-purple:#a78bfa;--c-pink:#ec6fae;--c-teal:#2bb3c2;--c-amber:#e0a43c}
+.sc-gray{--sc:var(--c-gray)}.sc-blue{--sc:var(--c-blue)}.sc-green{--sc:var(--c-green)}.sc-orange{--sc:var(--c-orange)}
+.sc-purple{--sc:var(--c-purple)}.sc-pink{--sc:var(--c-pink)}.sc-teal{--sc:var(--c-teal)}.sc-amber{--sc:var(--c-amber)}
+.spi{display:inline-flex;flex:none!important;width:auto!important;color:var(--sc)}
+.spi>.ic{color:var(--sc)!important}
+.spchip[aria-selected="true"] .spi,.spchip[aria-selected="true"] .spi>.ic{color:inherit!important}
+.prop.sp{background:color-mix(in srgb,var(--bg-3) 70%,transparent)}
+.swatch{display:block;width:14px;height:14px;border-radius:50%;background:var(--sc)}
+.sp-look{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
+.sp-color{width:16px;height:16px;padding:0;border-radius:50%;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--line-2);background:var(--sc)}
+.sp-color:active{transform:scale(.9)}
+/* пріоритет — кольорове кільце кружечка (як у сучасних списках задач) */
+.chk.p1{border-color:var(--amber);background:color-mix(in srgb,var(--amber) 10%,transparent)}
+.chk.p2{border-color:var(--red);background:var(--red-bg)}
+/* прогрес дня — зелений на чорній картці (з кольоровим акцентом картка й так кольорова) */
+:root:not([data-accent]) .dc-fg{stroke:var(--green)}
+/* акцент застосунку */
+:root[data-accent="blue"]{--accent:var(--c-blue);--accent-ink:#fff}
+:root[data-accent="purple"]{--accent:var(--c-purple);--accent-ink:#fff}
+:root[data-accent="green"]{--accent:var(--c-green);--accent-ink:#fff}
+:root[data-accent="orange"]{--accent:var(--c-orange);--accent-ink:#fff}
+:root[data-accent="pink"]{--accent:var(--c-pink);--accent-ink:#fff}
+.accent-seg{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px;padding:2px}
+.accent-seg button{width:32px;height:32px;padding:0;border-radius:50%;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--line-2);background:var(--sw);transition:transform .15s var(--spring),box-shadow .15s}
+.accent-seg button[aria-checked="true"]{box-shadow:0 0 0 2px var(--text);transform:scale(1.08)}

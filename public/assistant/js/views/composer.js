@@ -5,7 +5,7 @@
 import { post } from '../api.js';
 import { icon } from '../icons.js';
 import { esc, toast, menu, localInput, fmtDue } from '../ui.js';
-import { space, openSpaces } from '../store.js';
+import { space, openSpaces, spIcon } from '../store.js';
 import { datePicker } from './panel.js';
 import { recorder, micError } from '../voice.js';
 import { runVoice } from '../bgvoice.js';
@@ -79,7 +79,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       const sp = space(st.area);
       chips.innerHTML = `
         <button type="button" class="cmp-chip${st.due ? ' on' : ''}" data-c="due">${icon('calendar', 16)}<span>${st.due ? esc(fmtDue(st.due)) : 'Строк'}</span></button>
-        <button type="button" class="cmp-chip" data-c="area">${icon(sp.icon, 16)}<span>${esc(sp.name)}</span></button>
+        <button type="button" class="cmp-chip" data-c="area">${spIcon(sp, 16)}<span>${esc(sp.name)}</span></button>
         <button type="button" class="cmp-chip icon${st.prio ? ' on p' + st.prio : ''}" data-c="prio" aria-label="${PRIO[st.prio]}">${icon('flag', 16)}</button>
         ${st.due ? `<button type="button" class="cmp-chip icon${st.remind ? ' on' : ''}" data-c="remind" aria-pressed="${st.remind}" aria-label="Нагадати">${icon('bell', 16)}</button>` : ''}
         <button type="button" class="cmp-chip icon${subsBox.hidden ? '' : ' on'}" data-c="subs" aria-label="Підзадачі">${icon('subtasks', 16)}</button>`;
@@ -96,7 +96,9 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       clearInterval(recTimer); mic.classList.remove('on'); mic.style.setProperty('--lv', 0);
       if (!busy) status(HINT(), 'hint');
     }
-    async function listen() {
+    let starting = null, holding = false;
+    function listen() { return (starting = start()); }
+    async function start() {
       if (busy) return;
       if (rec) return finish();
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // ховаємо клавіатуру
@@ -105,7 +107,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       if (rec !== r) return;                                   // поки чекали дозволу, вже скасували
       mic.classList.add('on');
       const t0 = Date.now();
-      const show = () => { const s = Math.floor((Date.now() - t0) / 1000); status(`<i class="dot"></i>Слухаю ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · натисни, коли закінчиш`, 'live'); };
+      const show = () => { const s = Math.floor((Date.now() - t0) / 1000); status(`<i class="dot"></i>Слухаю ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · ${holding ? 'відпусти — надіслати' : 'натисни ще раз — надіслати'}`, 'live'); };
       show(); recTimer = setInterval(show, 500);
       if (navigator.vibrate) navigator.vibrate(15);
     }
@@ -124,6 +126,29 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       const hint = [st.area !== 'inbox' ? 'простір: ' + space(st.area).name : '', !st.ai && st.due ? 'строк: ' + fmtDue(st.due) : '', !st.ai && st.prio ? PRIO[st.prio].toLowerCase() : ''].filter(Boolean);
       return hint.length ? ` (${hint.join(', ')})` : '';
     }
+    // Мікрофон — так само, як центральна кнопка нижньої панелі: натиснути — говорити, ще раз — надіслати;
+    // утримати — говорити, відпустити — надіслати
+    let downAt = 0, holdT = 0;
+    mic.addEventListener('pointerdown', e => {
+      if (e.button > 0 || busy) return;
+      e.preventDefault();
+      if (rec) { downAt = 0; return finish(); }                    // уже слухаю (натиснули раніше) — цей дотик надсилає
+      downAt = Date.now(); holding = false;
+      listen();
+      holdT = setTimeout(() => { holding = true; mic.classList.add('hold'); }, 380);
+    });
+    const release = async () => {
+      clearTimeout(holdT);
+      if (!downAt) return;
+      downAt = 0;
+      if (!holding) return;                                         // короткий дотик — слухаю далі, до наступного натиску
+      holding = false; mic.classList.remove('hold');
+      await starting;
+      if (rec) finish();
+    };
+    mic.addEventListener('pointerup', release);
+    mic.addEventListener('pointercancel', release);
+    mic.addEventListener('contextmenu', e => e.preventDefault());
     let result = null;
     const close = () => {
       cancelRec();
@@ -139,7 +164,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       if (e.target.closest('[data-x]')) return close();
       const c = e.target.closest('[data-c]'); if (!c) return;
       const k = c.dataset.c;
-      if (k === 'mic') return listen();
+      if (k === 'mic') { if (e.detail === 0) listen(); return; }        // клавіатура (Enter / пробіл); палець і миша — нижче
       if (k === 'mode') { st.ai = !st.ai; drawMode(); return; }
       if (k === 'prio') st.prio = (st.prio + 1) % 3;
       if (k === 'remind') st.remind = !st.remind;

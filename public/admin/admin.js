@@ -8,6 +8,7 @@ import { wordmark } from '/assistant/js/logo.js';
 
 const app = $('#app');
 const t = pref.get('theme', 'system'); if (t !== 'system') document.documentElement.dataset.theme = t;
+const ac = pref.get('accent', 'black'); if (ac !== 'black') document.documentElement.dataset.accent = ac;
 
 const NAV = [
   ['overview', 'Огляд', 'activity'], ['users', 'Користувачі', 'users'], ['limits', 'Ліміти', 'progress'],

@@ -3,7 +3,7 @@
 import { get, post, patch, del, api } from '../api.js';
 import { icon, SPACE_ICONS } from '../icons.js';
 import { $, $$, esc, pref, toast, fail, menu, confirmBox, fmtDate, sheet } from '../ui.js';
-import { meta, refreshMeta } from '../store.js';
+import { meta, refreshMeta, spIcon, COLORS } from '../store.js';
 import * as push from '../push.js';
 
 const TZ = [['Europe/Kyiv', 'Київ'], ['Europe/Chisinau', 'Кишинів'], ['Europe/Warsaw', 'Варшава'], ['Europe/Berlin', 'Берлін'], ['Europe/Prague', 'Прага'], ['Europe/London', 'Лондон'], ['America/New_York', 'Нью-Йорк']];
@@ -66,7 +66,10 @@ export function settingsPage(sub) {
       <section class="set" id="set-look">
         <h2>Вигляд</h2>
         <div class="seg theme-seg">${[['system', 'Як у системі'], ['light', 'Світла'], ['dark', 'Темна']].map(([k, l]) => `<button type="button" data-theme="${k}">${l}</button>`).join('')}</div>
-        <p class="muted small">Гарячі клавіші: <kbd>Ctrl K</kbd> або <kbd>/</kbd> — пошук і перехід, <kbd>N</kbd> — нова задача, <kbd>B</kbd> — список ↔ дошка, <kbd>Esc</kbd> — закрити.</p>
+        <p class="muted small" style="margin:14px 0 0">Акцентний колір — кнопки, мікрофон, картка дня</p>
+        <div class="accent-seg">${[['black', 'Чорний', 'var(--text)'], ['blue', 'Синій', 'var(--c-blue)'], ['purple', 'Фіолетовий', 'var(--c-purple)'], ['green', 'Зелений', 'var(--c-green)'], ['orange', 'Помаранчевий', 'var(--c-orange)'], ['pink', 'Рожевий', 'var(--c-pink)']]
+          .map(([k, l, c]) => `<button type="button" data-accent="${k}" title="${l}" aria-label="${l}" style="--sw:${c}" aria-checked="${pref.get('accent', 'black') === k}"></button>`).join('')}</div>
+        <p class="muted small desk-only">Гарячі клавіші: <kbd>Ctrl K</kbd> або <kbd>/</kbd> — пошук і перехід, <kbd>N</kbd> — нова задача, <kbd>B</kbd> — список ↔ дошка, <kbd>Esc</kbd> — закрити.</p>
       </section>
 
       <section class="set" id="set-team">
@@ -202,7 +205,8 @@ export function settingsPage(sub) {
   // ---------- простори ----------
   function drawSpaces() {
     $('.spaces-list', root).innerHTML = meta.spaces.map(sp => `<div class="sp-row${sp.archived ? ' arch' : ''}" data-key="${sp.key}">
-      <button type="button" class="icon-btn sp-ic" data-a="sp-icon" title="Іконка">${icon(sp.icon, 18)}</button>
+      <span class="sp-look"><button type="button" class="icon-btn sp-ic" data-a="sp-icon" title="Іконка">${spIcon(sp, 18)}</button>
+        <button type="button" class="sp-color sc-${sp.color || 'gray'}" data-a="sp-color" title="Колір" aria-label="Колір"></button></span>
       <div class="sp-main">
         <input class="sp-name" value="${esc(sp.name)}" maxlength="40" aria-label="Назва">
         <textarea class="sp-desc" rows="1" maxlength="600" placeholder="${sp.key === 'inbox' ? 'Вхідні — для нерозкладених задач' : 'Що сюди належить — підказка асистенту'}" ${sp.key === 'inbox' ? 'disabled' : ''}>${esc(sp.key === 'inbox' ? '' : sp.description)}</textarea>
@@ -248,6 +252,8 @@ export function settingsPage(sub) {
       ta.value = ta.value.trim() && !STYLES.some(([, x]) => x === ta.value.trim()) ? ta.value.trim() + ' ' + t : t;
       $('.style-state', root).textContent = 'Не збережено'; ta.focus(); return;
     }
+    const ac = e.target.closest('[data-accent]');
+    if (ac) { window.MDMY.setAccent(ac.dataset.accent); $$('[data-accent]', root).forEach(b => b.setAttribute('aria-checked', String(b === ac))); return; }
     if (th) { window.MDMY.setTheme(th.dataset.theme); $$('[data-theme]', root).forEach(b => b.setAttribute('aria-checked', String(b === th))); return; }
     if (!a) return;
     const k = a.dataset.a, row = a.closest('[data-key]'), key = row && row.dataset.key;
@@ -256,6 +262,11 @@ export function settingsPage(sub) {
     if (k === 'unlink' && await confirmBox('Відвʼязати Telegram-чат? Нагадування перестануть приходити.', { ok: 'Відвʼязати' })) saveSettings({ unlink: true });
     if (k === 'space-add') {
       try { await post('assistant/spaces', { name: 'Новий простір', icon: 'folder' }); await refreshMeta(); drawSpaces(); const r = [...$$('.sp-name', root)].pop(); r.focus(); r.select(); } catch (err) { fail(err); }
+    }
+    if (k === 'sp-color') {
+      const sp = meta.spaces.find(x => x.key === key);
+      const v = await menu(a, COLORS.map(([c, l]) => ({ value: c, label: l, icon: `<i class="swatch sc-${c}"></i>`, checked: c === (sp && sp.color) })), { width: 200, title: 'Колір простору' });
+      if (v) { await saveSpace(key, { color: v }); drawSpaces(); }
     }
     if (k === 'sp-icon') {
       const v = await menu(a, SPACE_ICONS.map(n => ({ value: n, label: n, icon: n })), { width: 200 });

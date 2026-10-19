@@ -1,5 +1,6 @@
 // Загальний стан застосунку: довідники (простори, статуси, теги) і лічильники для бічної панелі.
 import { get } from './api.js';
+import { icon } from './icons.js';
 
 export const meta = { spaces: [], statuses: [], tags: [], counts: { spaces: {}, today: 0, inbox: 0, all: 0 }, icons: [] };
 const subs = new Set();
@@ -18,5 +19,8 @@ export async function refreshMeta() {
 export const space = key => meta.spaces.find(s => s.key === key) || { key, name: key, icon: 'folder' };
 export const status = key => meta.statuses.find(s => s.key === key) || { key, name: key };
 export const openSpaces = () => meta.spaces.filter(s => !s.archived);
+// колір простору (палітра в app.css: --c-blue …) і значок у цьому кольорі
+export const COLORS = [['gray', 'Сірий'], ['blue', 'Синій'], ['green', 'Зелений'], ['orange', 'Помаранчевий'], ['purple', 'Фіолетовий'], ['pink', 'Рожевий'], ['teal', 'Бірюзовий'], ['amber', 'Гірчичний']];
+export const spIcon = (key, size = 16) => { const sp = typeof key === 'string' ? space(key) : key; return `<span class="spi sc-${sp.color || 'gray'}">${icon(sp.icon, size)}</span>`; };
 export const doneStatus = () => (meta.statuses.find(s => s.done) || { key: 'done' }).key;
 export const firstStatus = () => (meta.statuses.find(s => !s.done) || { key: 'todo' }).key;

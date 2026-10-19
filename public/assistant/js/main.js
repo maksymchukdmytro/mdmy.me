@@ -4,7 +4,7 @@ import { api, post, onUnauthorized, telegramInitData, telegramLogin, clearToken 
 import { wordmark } from './logo.js';
 import { icon } from './icons.js';
 import { $, $$, esc, pref, toast, isTyping, debounce, fmtDue, sheet } from './ui.js';
-import { meta, refreshMeta, onMeta, openSpaces, space } from './store.js';
+import { meta, refreshMeta, onMeta, openSpaces, space, spIcon } from './store.js';
 import { tasksPage } from './views/tasks.js';
 import { openTask, closeTask, panelOpenId } from './views/panel.js';
 import { notesPage } from './views/notes.js';
@@ -24,11 +24,13 @@ let account = null, current = null, currentKey = '';
 
 // ---------- тема ----------
 function applyTheme() {
-  const t = pref.get('theme', 'system');
-  if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  const t = pref.get('theme', 'system'), a = pref.get('accent', 'black'), h = document.documentElement;
+  if (t === 'system') delete h.dataset.theme; else h.dataset.theme = t;
+  if (a === 'black') delete h.dataset.accent; else h.dataset.accent = a;     // акцентний колір (Налаштування → Вигляд)
 }
 applyTheme();
 export const setTheme = t => { pref.set('theme', t); applyTheme(); };
+export const setAccent = a => { pref.set('accent', a); applyTheme(); };
 
 // ---------- вхід ----------
 // Головне — «Продовжити з Google» (вхід і реєстрація одним кроком); логін і пароль — під ним, згорнуто.
@@ -117,7 +119,7 @@ function shell() {
 function renderSideSpaces() {
   const box = $('#sideSpaces'); if (!box) return;
   box.innerHTML = openSpaces().filter(s => s.key !== 'inbox').map(s =>
-    `<a class="side-item" href="#/s/${s.key}" data-r="s/${s.key}">${icon(s.icon)}<span>${esc(s.name)}</span><b class="n" data-n="s:${s.key}"></b></a>`).join('');
+    `<a class="side-item" href="#/s/${s.key}" data-r="s/${s.key}">${spIcon(s)}<span>${esc(s.name)}</span><b class="n" data-n="s:${s.key}"></b></a>`).join('');
   renderCounts(); markActive();
 }
 // «Стабільність»: зроблено за 14 днів (задачі й ритуали) — плавна лінія
@@ -174,13 +176,13 @@ async function onShellClick(e) {
 // Головна, Задачі й Щоденні — на нижній панелі, тут решта: пошук, Вхідні, Найближчі, простори, інші розділи.
 function phoneMenu() {
   const c = meta.counts || {}, cur = currentKey, teamN = meta.teamN || 0;
-  const item = (href, ic, label, n, key) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
+  const item = (href, ic, label, n, key, sp) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${sp ? spIcon(sp, 20) : icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
   const s = sheet(`<div class="m-sheet">
       <button type="button" class="m-search" data-m="search">${icon('search', 18)}Пошук задач і нотаток</button>
       ${item('#/s/inbox', 'inbox', 'Вхідні', c.inbox, 's/inbox')}
       ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
       <p class="m-label">Простори</p>
-      ${openSpaces().filter(x => x.key !== 'inbox').map(x => item('#/s/' + x.key, x.icon, x.name, (c.spaces || {})[x.key], 's/' + x.key)).join('')}
+      ${openSpaces().filter(x => x.key !== 'inbox').map(x => item('#/s/' + x.key, x.icon, x.name, (c.spaces || {})[x.key], 's/' + x.key, x)).join('')}
       <a class="m-item add" href="#/settings/spaces">${icon('plus', 20)}<span>Новий простір</span></a>
       <p class="m-label">Ще</p>
       ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
@@ -378,5 +380,5 @@ export async function logout() {
 }
 export const getAccount = () => account;
 // для статистичних сторінок і налаштувань
-window.MDMY = { go, logout, setTheme, refreshMeta };
+window.MDMY = { go, logout, setTheme, setAccent, refreshMeta };
 boot();

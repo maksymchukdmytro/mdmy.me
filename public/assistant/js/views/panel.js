@@ -3,7 +3,7 @@ import { get, patch, del, post } from '../api.js';
 import { attachHtml, bindAttach, uploadFile } from './attach.js';
 import { icon, STATUS_ICON } from '../icons.js';
 import { $, esc, fmtDate, fmtDue, localInput, menu, confirmBox, toast, fail, autosize, debounce, isPhone, sheet, dragToClose } from '../ui.js';
-import { meta, space, status, openSpaces } from '../store.js';
+import { meta, space, status, openSpaces, spIcon } from '../store.js';
 import { go, pageHref, taskHref } from '../nav.js';
 
 let cur = null;            // { id, it, el }
@@ -107,7 +107,7 @@ function render() {
   panel.innerHTML = `
     <div class="sheet-grab phone-only" aria-hidden="true"></div>
     <header class="panel-top">
-      <div class="crumb">${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>${it.parent ? `<span class="sep">/</span><a href="${taskHref(it.parent.id)}">${esc(it.parent.text)}</a>` : ''}</div>
+      <div class="crumb">${spIcon(sp, 14)}<span>${esc(sp.name)}</span>${it.parent ? `<span class="sep">/</span><a href="${taskHref(it.parent.id)}">${esc(it.parent.text)}</a>` : ''}</div>
       <div class="panel-act">
         <button type="button" class="icon-btn" data-a="more" title="Ще">${icon('more')}</button>
         <button type="button" class="icon-btn" data-a="close" title="Закрити (Esc)">${icon('x')}</button>
@@ -120,7 +120,7 @@ function render() {
       </div>
       <div class="props">
         ${propBtn('status', 'status', 'Статус', `${icon(STATUS_ICON[it.status] || 'circle', 14)}<span>${esc(st.name)}</span>`)}
-        ${propBtn('area', 'layers', 'Простір', `${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>`)}
+        ${propBtn('area', 'layers', 'Простір', `${spIcon(sp, 14)}<span>${esc(sp.name)}</span>`)}
         <div class="prop-row"><span class="pk">${icon('calendar')}<span>Строк</span></span>
           <button type="button" class="pv${it.due_at ? '' : ' none'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
         </div>

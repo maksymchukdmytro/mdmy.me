@@ -4,7 +4,7 @@ import { api, get, post } from '../api.js';
 import { icon, STATUS_ICON } from '../icons.js';
 import { $, $$, esc, pref, toast, fail, menu, confirmBox, debounce, fmtDue, dueBucket, BUCKETS, isTyping, spin, wait } from '../ui.js';
 import { todayRituals } from './rituals.js';
-import { meta, space, status, openSpaces, firstStatus, onMeta } from '../store.js';
+import { meta, space, status, openSpaces, firstStatus, onMeta, refreshMeta, spIcon } from '../store.js';
 import { go, taskHref } from '../nav.js';
 import { datePicker } from './panel.js';
 import { compose } from './composer.js';
@@ -98,8 +98,69 @@ export function tasksPage(cfg) {
   function drawSpaces() {
     const box = $('.spchips', root); if (!box) return;
     const n = k => cfg.view === 'open' ? (k ? meta.counts.spaces[k] || 0 : meta.counts.all) : null;
-    const chip = (k, label, ic) => `<button type="button" class="spchip" data-space="${k}" role="tab" aria-selected="${st.space === k}">${ic ? icon(ic, 14) : ''}<span>${esc(label)}</span>${n(k) != null ? `<b>${n(k)}</b>` : ''}</button>`;
-    box.innerHTML = chip('', 'Усі') + openSpaces().map(sp => chip(sp.key, sp.name, sp.icon)).join('');
+    const chip = (k, label, sp) => `<button type="button" class="spchip" data-space="${k}" role="tab" aria-selected="${st.space === k}">${sp ? spIcon(sp, 14) : ''}<span>${esc(label)}</span>${n(k) != null ? `<b>${n(k)}</b>` : ''}</button>`;
+    box.innerHTML = chip('', 'Усі') + openSpaces().map(sp => chip(sp.key, sp.name, sp)).join('');
+    if (!box.dataset.dnd) { box.dataset.dnd = '1'; spacesDnd(box); }
+  }
+  // Порядок просторів — перетягуванням чипів: мишею одразу, пальцем — утримати й вести (щоб не заважати прокрутці рядка).
+  // Новий порядок зберігається для всіх розділів (бічна панель, меню, групи «За простором»).
+  function spacesDnd(box) {
+    let d = null, suppress = false;
+    const chips = () => [...box.querySelectorAll('.spchip[data-space]:not([data-space=""])')];
+    box.addEventListener('pointerdown', e => {
+      const c = e.target.closest('.spchip'); if (!c || !c.dataset.space || e.button > 0) return;
+      d = { c, id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, touch: e.pointerType !== 'mouse' };
+      if (d.touch) d.t = setTimeout(() => begin(e.clientX), 320);
+    });
+    const begin = x => {
+      if (!d || d.on) return;
+      d.on = true; d.dx = x - d.c.getBoundingClientRect().left;
+      d.c.classList.add('drag'); box.classList.add('dragging');
+      try { d.c.setPointerCapture(d.id); } catch (er) {}
+      if (navigator.vibrate) navigator.vibrate(10);
+    };
+    box.addEventListener('pointermove', e => {
+      if (!d || e.pointerId !== d.id) return;
+      if (!d.on) {
+        const mx = Math.abs(e.clientX - d.x0), my = Math.abs(e.clientY - d.y0);
+        if (d.touch) { if (mx > 8 || my > 8) { clearTimeout(d.t); d = null; } return; }   // палець рушив раніше — це прокрутка
+        if (mx > 5) begin(e.clientX); else return;
+      }
+      e.preventDefault();
+      d.c.style.transform = `translateX(${e.clientX - d.x0}px)`;
+      // переставляємо в DOM, коли палець перейшов середину сусіда
+      const others = chips().filter(x => x !== d.c);
+      const after = others.find(x => { const r = x.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
+      const before = d.c.nextElementSibling, x0 = d.c.getBoundingClientRect().left;
+      if (after) { if (after !== d.c.nextElementSibling) box.insertBefore(d.c, after); }
+      else if (box.lastElementChild !== d.c) box.append(d.c);
+      if (d.c.nextElementSibling !== before) { const moved = d.c.getBoundingClientRect().left - x0; d.x0 += moved; d.c.style.transform = `translateX(${e.clientX - d.x0}px)`; }
+      // край рядка — підкручуємо
+      const br = box.getBoundingClientRect();
+      if (e.clientX < br.left + 30) box.scrollLeft -= 8; else if (e.clientX > br.right - 30) box.scrollLeft += 8;
+    });
+    const end = async e => {
+      if (!d || (e && e.pointerId !== d.id)) return;
+      clearTimeout(d.t);
+      const was = d; d = null;
+      if (!was.on) return;
+      suppress = true; setTimeout(() => { suppress = false; }, 50);
+      was.c.classList.remove('drag'); was.c.style.transform = ''; box.classList.remove('dragging');
+      const order = chips().map(x => x.dataset.space), cur = openSpaces().map(x => x.key);
+      if (order.join() === cur.join()) return;
+      try {
+        const list = openSpaces();
+        await Promise.all(order.map((k, i) => (list.find(x => x.key === k) || {}).position !== i + 1 ? api('assistant/spaces/' + k, { method: 'PATCH', json: { position: i + 1 } }) : null));
+        await refreshMeta();
+        toast('Порядок просторів збережено');
+      } catch (er) { fail(er); drawSpaces(); }
+    };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+    box.addEventListener('click', e => { if (suppress) { e.stopPropagation(); e.preventDefault(); } }, true);
+    box.addEventListener('contextmenu', e => { if (e.target.closest('.spchip')) e.preventDefault(); });
+    // пальцем: коли перетягування почалось, рядок не прокручується
+    box.addEventListener('touchmove', e => { if (d && d.on) e.preventDefault(); }, { passive: false });
   }
 
   // ---------- завантаження ----------
@@ -244,7 +305,7 @@ export function tasksPage(cfg) {
       box.innerHTML = add + keys.map(k => {
         const g = groups.get(k), hid = st.collapsed.has(k);
         const head = g.l ? `<button type="button" class="grp-h${k === 'overdue' || k === 'late' ? ' late' : ''}" data-grp="${esc(k)}">${icon(hid ? 'chevronRight' : 'chevronDown', 14)}${
-          st.group === 'space' && !st.showDone ? icon(space(k).icon, 14) : st.group === 'status' && !st.showDone ? icon(STATUS_ICON[k] || 'circle', 14) : ''}<span>${esc(g.l)}</span><b>${g.list.length}</b></button>` : '';
+          st.group === 'space' && !st.showDone ? spIcon(k, 14) : st.group === 'status' && !st.showDone ? icon(STATUS_ICON[k] || 'circle', 14) : ''}<span>${esc(g.l)}</span><b>${g.list.length}</b></button>` : '';
         return `<section class="grp${hid ? ' hid' : ''}">${head}<div class="rows">${g.list.map(it => rowHtml(it, false, rowN()) + it.children.map(c => rowHtml(c, true, rowN())).join('')).join('')}</div></section>`;
       }).join('');
     }
@@ -263,14 +324,14 @@ export function tasksPage(cfg) {
     if (!child && !it.done && it.area === 'inbox' && cfg.area === 'inbox') {          // швидке розкладання — лише на сторінці «Вхідні»
       const sug = st.sug.get(it.id);
       out.push(`<span class="quick">${sug ? `<button type="button" class="qchip sug" data-a="area" data-v="${sug}" title="Підказка асистента">${icon('sparkles', 12)}${esc(space(sug).name)}</button>` : ''}${
-        openSpaces().filter(s => s.key !== 'inbox' && s.key !== sug).slice(0, 3).map(s => `<button type="button" class="qchip" data-a="area" data-v="${s.key}" title="Перенести в «${esc(s.name)}»">${icon(s.icon, 12)}<span>${esc(s.name)}</span></button>`).join('')}${
+        openSpaces().filter(s => s.key !== 'inbox' && s.key !== sug).slice(0, 3).map(s => `<button type="button" class="qchip" data-a="area" data-v="${s.key}" title="Перенести в «${esc(s.name)}»">${spIcon(s, 12)}<span>${esc(s.name)}</span></button>`).join('')}${
         openSpaces().length > 4 ? `<button type="button" class="qchip" data-a="area-menu" title="Інший простір">${icon('more', 12)}</button>` : ''}</span>`);
     }
     if (it.status !== firstStatus() && !it.done) out.push(`<span class="prop st-${it.status}">${icon(STATUS_ICON[it.status] || 'circle', 13)}${esc(status(it.status).name)}</span>`);
     out.push(whenProps(it, 13, isToday && st.group === 'tod'));
     if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
     if (it.tags && it.tags.length && !child) out.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
-    if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
+    if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${spIcon(it.area, 13)}${esc(space(it.area).name)}</span>`);
     return out.join('');
   }
   // строк і нагадування: «🔔 17:00» (нагадування в час строку), або «📅 22:00 · 🔔 17:00»; сьогоднішній час на «Сьогодні» — без слова «Сьогодні»
@@ -286,7 +347,7 @@ export function tasksPage(cfg) {
     const kids = it.children || [], kd = kids.filter(k => k.done).length;
     return `<div class="row${child ? ' child' : ''}${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}"${child ? ` data-parent="${it.parent_id}"` : ''} style="--i:${i}">
       <label class="row-sel"><input type="checkbox" data-a="sel" ${st.sel.has(it.id) ? 'checked' : ''} aria-label="Вибрати"></label>
-      <button type="button" class="chk${it.done ? ' on' : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
+      <button type="button" class="chk${it.done ? ' on' : ''}${it.priority && !it.done ? ' p' + it.priority : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
       <a class="row-main" href="${taskHref(it.id)}" data-a="open">
         <span class="row-title">${esc(it.text)}</span>
         ${!child && kids.length ? `<span class="row-meta">${icon('subtasks', 13)}${kd}/${kids.length}</span>` : ''}${it.att ? `<span class="row-meta">${icon('paperclip', 13)}${it.att}</span>` : ''}
@@ -305,7 +366,7 @@ export function tasksPage(cfg) {
     if (kids.length) bits.push(`<span class="prop">${icon('subtasks', 12)}${kd}/${kids.length}</span>`);
     if (it.att) bits.push(`<span class="prop">${icon('paperclip', 12)}${it.att}</span>`);
     if (it.tags && it.tags.length) bits.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
-    if (cross) bits.push(`<span class="prop sp">${icon(space(it.area).icon, 12)}${esc(space(it.area).name)}</span>`);
+    if (cross) bits.push(`<span class="prop sp">${spIcon(it.area, 12)}${esc(space(it.area).name)}</span>`);
     return `<div class="card${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" tabindex="0">
       <div class="card-title">${it.done ? icon('checkCircle', 14) : ''}${esc(it.text)}</div>
       ${it.description ? `<div class="card-desc">${esc(it.description.slice(0, 140))}</div>` : ''}
@@ -594,7 +655,7 @@ export function tasksPage(cfg) {
         <div class="tri-meta">${props({ ...it, area: '' }, false)}</div>
         ${it.description ? `<p class="tri-desc">${esc(it.description.slice(0, 300))}</p>` : ''}
         ${sug ? `<p class="tri-sug">${icon('sparkles', 14)}Асистент радить: <b>${esc(space(sug).name)}</b></p>` : ''}
-        <div class="tri-spaces">${spaces.map((s, n) => `<button type="button" class="tri-sp${s.key === sug ? ' sug' : ''}" data-s="${s.key}">${icon(s.icon, 20)}<span>${esc(s.name)}</span><kbd>${n + 1}</kbd></button>`).join('')}</div>
+        <div class="tri-spaces">${spaces.map((s, n) => `<button type="button" class="tri-sp${s.key === sug ? ' sug' : ''}" data-s="${s.key}">${spIcon(s, 20)}<span>${esc(s.name)}</span><kbd>${n + 1}</kbd></button>`).join('')}</div>
         <footer>
           <button type="button" class="btn sm ghost" data-t="back" ${hist.length ? '' : 'disabled'}>${icon('chevronLeft', 14)}Назад</button>
           <button type="button" class="btn sm ghost" data-t="done">${icon('checkCircle', 14)}Вже зроблено <kbd>D</kbd></button>
