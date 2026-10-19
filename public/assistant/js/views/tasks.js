@@ -133,9 +133,10 @@ export function tasksPage(cfg) {
     const open = st.items.length, doneT = (st.doneToday || []).length;
     const rDone = st.rituals.reduce((s, r) => s + (r.active ? r.done : 0), 0), rTotal = st.rituals.reduce((s, r) => s + (r.active ? r.total : 0), 0);
     const done = doneT + rDone, total = done + open + Math.max(0, rTotal - rDone);
-    const late = st.items.filter(it => it.overdue && !(it.kind === 'reminder' && it.sent)).length;
-    // що далі: найближча задача з часом або раз ритуалу
-    const nextTask = st.items.filter(it => it.due_at && it.due_at >= now).sort((a, b) => a.due_at - b.due_at)[0];
+    const late = st.items.filter(it => it.overdue).length;
+    // що далі: найближча задача з часом (строк чи нагадування — що раніше) або раз ритуалу
+    const soon = it => Math.min(...[it.due_at, it.remind_at].filter(x => x && x >= now));
+    const nextTask = st.items.filter(it => isFinite(soon(it))).map(it => ({ ...it, due_at: soon(it) })).sort((a, b) => a.due_at - b.due_at)[0];
     const nextRit = st.rituals.filter(r => r.active && (r.pending || r.next)).map(r => ({ r, at: r.pending ? now : (() => { const d = new Date(); d.setHours(+r.next.slice(0, 2), +r.next.slice(3), 0, 0); return d.getTime(); })() }))
       .sort((a, b) => a.at - b.at)[0];
     let next = '';
@@ -175,7 +176,7 @@ export function tasksPage(cfg) {
     if (st.group === 'space') return [it.area, space(it.area).name];
     if (st.group === 'date') { const b = dueBucket(it); return [b, BUCKETS[b]]; }
     if (st.group === 'tod') {
-      if (it.overdue && !(it.kind === 'reminder' && it.sent)) return ['late', TOD.late];
+      if (it.overdue) return ['late', TOD.late];
       if (!it.due_at) return ['nodate', TOD.nodate];
       const h = new Date(it.due_at).getHours(), k = h < 12 ? 'morning' : h < 17 ? 'day' : 'evening';
       return [k, TOD[k]];
@@ -232,11 +233,20 @@ export function tasksPage(cfg) {
         openSpaces().length > 4 ? `<button type="button" class="qchip" data-a="area-menu" title="Інший простір">${icon('more', 12)}</button>` : ''}</span>`);
     }
     if (it.status !== firstStatus() && !it.done) out.push(`<span class="prop st-${it.status}">${icon(STATUS_ICON[it.status] || 'circle', 13)}${esc(status(it.status).name)}</span>`);
-    if (it.due_at) out.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 13)}${esc(isToday && st.group === 'tod' && dueBucket(it) === 'today' ? fmtDue(it.due_at).replace('Сьогодні ', '') : fmtDue(it.due_at))}${it.repeatText ? icon('repeat', 12) : ''}</span>`);
+    out.push(whenProps(it, 13, isToday && st.group === 'tod'));
     if (it.priority) out.push(`<span class="prop prio p${it.priority}" title="${it.priority === 2 ? 'Термінова' : 'Важлива'}">${icon('flag', 13)}</span>`);
     if (it.tags && it.tags.length && !child) out.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
     if (cross && !child && it.area !== 'inbox' && st.group !== 'space') out.push(`<span class="prop sp">${icon(space(it.area).icon, 13)}${esc(space(it.area).name)}</span>`);
     return out.join('');
+  }
+  // строк і нагадування: «🔔 17:00» (нагадування в час строку), або «📅 22:00 · 🔔 17:00»; сьогоднішній час на «Сьогодні» — без слова «Сьогодні»
+  function whenProps(it, sz, short) {
+    const f = ms => short && new Date(ms).toDateString() === new Date().toDateString() ? fmtDue(ms).replace('Сьогодні ', '') : fmtDue(ms);
+    const ping = it.remind_at && it.remind_at === it.due_at, late = it.overdue && !it.done ? ' late' : '';
+    let h = '';
+    if (it.due_at) h += `<span class="prop${late}">${icon(ping ? 'bell' : 'calendar', sz)}${esc(f(it.due_at))}${it.repeatText ? icon('repeat', sz - 1) : ''}</span>`;
+    if (it.remind_at && !ping && !it.done) h += `<span class="prop${it.sent ? ' muted' : ''}" title="Нагадування">${icon('bell', sz)}${esc(f(it.remind_at))}</span>`;
+    return h;
   }
   function rowHtml(it, child, i = 0) {
     const kids = it.children || [], kd = kids.filter(k => k.done).length;
@@ -256,7 +266,7 @@ export function tasksPage(cfg) {
   function cardHtml(it) {
     const kids = it.children || [], kd = kids.filter(k => k.done).length;
     const bits = [];
-    if (it.due_at) bits.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 12)}${esc(fmtDue(it.due_at))}</span>`);
+    bits.push(whenProps(it, 12, false));
     if (it.priority) bits.push(`<span class="prop prio p${it.priority}">${icon('flag', 12)}${it.priority === 2 ? 'Термінова' : 'Важлива'}</span>`);
     if (kids.length) bits.push(`<span class="prop">${icon('subtasks', 12)}${kd}/${kids.length}</span>`);
     if (it.att) bits.push(`<span class="prop">${icon('paperclip', 12)}${it.att}</span>`);

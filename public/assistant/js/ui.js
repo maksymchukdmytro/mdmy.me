@@ -35,7 +35,7 @@ export function localInput(ms) {
 export function dueBucket(it) {
   if (!it.due_at) return 'nodate';
   const diff = Math.round((start(it.due_at) - start(Date.now())) / DAY);
-  if (it.overdue && !(it.kind === 'reminder' && it.sent)) return 'overdue';
+  if (it.overdue) return 'overdue';
   if (diff <= 0) return 'today';
   if (diff === 1) return 'tomorrow';
   if (diff < 7) return 'week';

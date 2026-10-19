@@ -162,7 +162,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
           toast([r.reply, ...(r.done || [])].filter(Boolean).join('\n') || 'Записав', r.undoable ? async () => { await post('assistant/undo', { msgId: r.msgId }); changed(); } : null, 6000);
           result = r.items && r.items[0] ? r.items[0].id : null;
         } else {
-          const it = await post('assistant/items', { text, area: st.area, priority: st.prio, due: st.due ? localInput(st.due) : undefined, kind: st.remind ? 'reminder' : 'task' });
+          const it = await post('assistant/items', { text, area: st.area, priority: st.prio, due: st.due ? localInput(st.due) : undefined, remind: st.due && st.remind ? true : undefined });
           const subs = subsBox.hidden ? [] : [...subsBox.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean);
           for (const t of subs) await post('assistant/items', { text: t, parent_id: it.id });
           result = it.id; toast(subs.length ? `Додано з підзадачами: ${subs.length}` : 'Додано');

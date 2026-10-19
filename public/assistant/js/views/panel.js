@@ -123,7 +123,9 @@ function render() {
         ${propBtn('area', 'layers', 'Простір', `${icon(sp.icon, 14)}<span>${esc(sp.name)}</span>`)}
         <div class="prop-row"><span class="pk">${icon('calendar')}<span>Строк</span></span>
           <button type="button" class="pv${it.due_at ? '' : ' none'}" data-p="due">${it.due_at ? `<span class="${it.overdue && !it.done ? 'late' : ''}">${esc(fmtDue(it.due_at))}</span>` : 'Без строку'}</button>
-          ${it.due_at && it.kind !== 'note' ? `<button type="button" class="pv-bell${it.kind === 'reminder' ? ' on' : ''}" data-p="kind" aria-pressed="${it.kind === 'reminder'}" title="${it.kind === 'reminder' ? 'Нагадаю в цей час — натисніть, щоб вимкнути' : 'Нагадати в цей час'}">${icon('bell', 15)}<span>${it.kind === 'reminder' ? 'Нагадаю' : 'Нагадати'}</span></button>` : ''}</div>
+        </div>
+        <div class="prop-row"><span class="pk">${icon('bell')}<span>Нагадати</span></span>
+          <button type="button" class="pv${it.remind_at ? '' : ' none'}" data-p="remind">${it.remind_at ? `<span class="${it.sent && !it.done ? 'muted' : ''}">${esc(remindLabel(it))}</span>` : 'Не нагадувати'}</button></div>
         ${propBtn('prio', 'flag', 'Пріоритет', it.priority ? `<span class="prio p${it.priority}">${icon('flag', 14)}${PRIO[it.priority].label}</span>` : '', 'Без пріоритету')}
         <div class="prop-row"><span class="pk">${icon('tag')}<span>Теги</span></span>
           <div class="tagbox">${(it.tags || []).map(t => `<span class="tchip">#${esc(t)}<button type="button" data-a="tag-del" data-tag="${esc(t)}" aria-label="Прибрати тег">${icon('x', 12)}</button></span>`).join('')}<input class="tag-in" data-a="tag-add" list="tagList" placeholder="${(it.tags || []).length ? '' : 'Додати тег'}" enterkeyhint="done" autocapitalize="off" maxlength="30"></div></div>
@@ -203,7 +205,18 @@ async function onClick(e) {
     const v = await menu(b, PRIO.map(x => ({ value: String(x.v), label: x.label, icon: x.v ? 'flag' : 'circle', checked: x.v === it.priority })));
     if (v != null && +v !== it.priority) save({ priority: +v });
   }
-  if (p === 'kind' && it.due_at && it.kind !== 'note') save({ kind: it.kind === 'reminder' ? 'task' : 'reminder' });
+  if (p === 'remind') {
+    const before = m => localInput(it.due_at - m * 60e3), items = [];
+    if (it.due_at) items.push({ value: 'due', label: 'У час строку', icon: 'bell', checked: it.remind_at === it.due_at },
+                              { value: before(15), label: 'За 15 хв до строку', icon: 'clock' }, { value: before(60), label: 'За годину до строку', icon: 'clock' });
+    items.push({ value: 'pick', label: 'Вибрати час…', icon: 'calendar' });
+    if (it.remind_at) items.push({ value: 'none', label: 'Не нагадувати', icon: 'x' });
+    const v = await menu(b, items);
+    if (v === 'due') save({ remind: true });
+    else if (v === 'none') save({ remind: null });
+    else if (v === 'pick') { const t = await datePicker(b, it.remind_at || it.due_at, { title: 'Нагадати', none: 'Не нагадувати' }); if (t !== undefined) save({ remind: t || null }); }
+    else if (v) save({ remind: v });
+  }
   if (p === 'due') {
     const v = await datePicker(b, it.due_at);
     if (v !== undefined) save({ due: v });
@@ -270,7 +283,15 @@ async function onPanelKey(e) {
 }
 
 // ---------- вибір дати й часу ----------
-export function datePicker(anchor, ms) {
+// Нагадування в картці: «сьогодні 17:00», «у час строку» — коротко, без дублю строку
+function remindLabel(it) {
+  if (it.remind_at === it.due_at) return 'У час строку';
+  const d = it.due_at && it.due_at - it.remind_at;
+  if (d === 15 * 60e3) return 'За 15 хв до строку';
+  if (d === 60 * 60e3) return 'За годину до строку';
+  return fmtDue(it.remind_at);
+}
+export function datePicker(anchor, ms, { title = 'Строк', none = 'Без строку' } = {}) {
   return new Promise(resolve => {
     document.querySelectorAll('.pop').forEach(x => x.remove());
     const d0 = new Date(); d0.setSeconds(0, 0);
@@ -282,11 +303,11 @@ export function datePicker(anchor, ms) {
       <button type="button" class="pop-item" data-v="${at(toMon, 9)}">${icon('calendar')}<span class="pop-l">Наступний понеділок</span><span class="pop-h">9:00</span></button>
       <div class="pop-sep"></div>
       <label class="date-in"><input type="datetime-local" value="${ms ? localInput(ms) : ''}"></label>
-      <div class="date-act"><button type="button" class="btn sm" data-v="">Без строку</button><button type="button" class="btn primary sm" data-ok>Готово</button></div>`;
+      <div class="date-act"><button type="button" class="btn sm" data-v="">${none}</button><button type="button" class="btn primary sm" data-ok>Готово</button></div>`;
     let box, closeBox, result;
     if (isPhone()) {
       // телефон: нижній аркуш
-      const sh = sheet(`<div class="sheet-head"><b>Строк</b></div><div class="date-sheet">${inner}</div>`, { label: 'Строк', onClose: () => resolve(result) });
+      const sh = sheet(`<div class="sheet-head"><b>${title}</b></div><div class="date-sheet">${inner}</div>`, { label: title, onClose: () => resolve(result) });
       box = sh.el; closeBox = sh.close;
     } else {
       box = document.createElement('div'); box.className = 'pop date-pop'; box.innerHTML = inner;

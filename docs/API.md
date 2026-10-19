@@ -22,13 +22,14 @@
 
 ```json
 {
-  "id": 12, "kind": "task" | "reminder" | "note",
+  "id": 12, "kind": "task" | "note",
   "text": "Назва", "description": "Опис / тіло задачі",
   "area": "work",            // ключ простору
   "status": "todo",          // ключ статусу (колонка дошки)
   "position": 2048,          // порядок у колонці
   "priority": 0 | 1 | 2,     // звичайна / важлива / термінова
-  "due_at": 1792306800000,   // мс UTC або null; "when" — те саме текстом
+  "due_at": 1792306800000,   // строк: мс UTC або null; "when" — те саме текстом
+  "remind_at": 1792288800000, // нагадування (коли написати власнику) або null; "remindWhen" — текстом; "sent" — уже надіслано
   "repeat": {"freq": "weekly", "interval": 1, "days": [1]} | null, "repeatText": "щопонеділка",
   "tags": ["клієнт"],          // теги (проєктів окремо немає)
   "parent_id": null, "children": [ …підзадачі… ],
@@ -36,6 +37,7 @@
 }
 ```
 
+Окремих нагадувань немає (з v11): нагадування — властивість задачі. Старе `kind: "reminder"` у запиті = `remind: true`.
 Статус і виконання завжди узгоджені: статус із `done: true` (стандартно `done`) ставить `done_at`, будь-який інший — знімає.
 Повторювана задача, позначена виконаною, переходить на наступний раз (`next` у відповіді).
 
@@ -50,9 +52,9 @@
 | `GET meta` | Довідники й лічильники для навігації: `spaces`, `statuses`, `tags [{name, open}]`, `icons`, `counts {spaces, today, inbox, all, views, done7 {простір: n}, doneToday}`, `activity [{day, n}]` — зроблено по днях за 14 днів (задачі + ритуали) |
 | `GET tasks?area&view&status&q&tag&prio&sort&offset&limit` | Список верхньорівневих задач з підзадачами (`children`), `total`, `counts`. `area`: ключ простору або `all`; `view`: `open` · `today` · `overdue` · `week` · `nodate` · `done` · `any`; `sort`: `smart` · `prio` · `created` · `alpha` · `manual`; `limit` до 200 |
 | `GET board?area&view&q&tag&prio` | Канбан: `columns[] = {status, name, done, total, items[]}`; «готово» — за останні 14 днів |
-| `POST items` | Створити: `{text, area?, status?, due?, priority?, tags?, description?, parent_id?, kind?, after?, before?}`. `due` — місцевий час `YYYY-MM-DDTHH:MM` |
+| `POST items` | Створити: `{text, area?, status?, due?, priority?, tags?, description?, parent_id?, remind?, after?, before?}`. `due` — місцевий час `YYYY-MM-DDTHH:MM`; `remind` — так само, або `true` (у час строку) |
 | `GET items/:id` | Задача з підзадачами й батьком |
-| `PATCH items/:id` | Змінити будь-які з полів вище; `due: ""` — прибрати строк |
+| `PATCH items/:id` | Змінити будь-які з полів вище; `due: ""` — прибрати строк, `remind: null` — без нагадування. Строк зсувається — нагадування зсувається на стільки ж |
 | `DELETE items/:id` | Видалити разом із підзадачами |
 | `POST items/:id/move` | Перетягнути: `{status?, area?, before?, after?}` (id сусідніх карток) |
 | `POST items/:id/complete`, `POST items/:id/reopen` | Виконати / повернути |

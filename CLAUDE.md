@@ -21,7 +21,7 @@
   Старі адреси `/speachtotext` → 301 на `/assistant/`.
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
-- `lib/db.js` — схема (PRAGMA user_version, зараз 10): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
+- `lib/db.js` — схема (PRAGMA user_version, зараз 11): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
   і таблиці асистента `assistant_*`. Нові зміни схеми — новою міграцією з наступним `user_version`.
 - `public/nakladna/` + `lib/nakladna.js` — видаткові накладні: LP-CRM getOrdersByID; короткий номер (напр. 353) шукається через getStatuses + getOrdersIdByStatus
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
@@ -105,9 +105,14 @@
   Фронтенд: `views/team.js` (#/team, деталі — аркуш #/team/a/<id>), `views/challenges.js` (#/challenges, #/challenges/<id>), налаштування → «Команда» (свій ID, «Отримувати задачі від»).
   Лічильник «Доручень» (зробити + перевірити) — `meta.teamN` (store.js). Видалення акаунта прибирає його спільне (`team.forgetAccount`).
 - Дошка: під час перетягування знизу — панель колонок і смітник (`openDock` у tasks.js); кинути на колонку — у її кінець, у смітник — видалення з «Скасувати».
+- Нагадування (міграція v11): властивість задачі, а не окремий тип. `assistant_items.remind_at` — коли написати (`sent_at` — уже написали), `due_at` — строк;
+  старі `kind = 'reminder'` стали задачами з `remind_at = due_at`. Строк зсувається — нагадування теж (updateItem). Таймер шле за `remind_at`.
+  «Просто нагадування» (`remind_at = due_at`, `store.isPing`) з повтором після надсилання одразу переходить на наступний раз (кнопка «Готово» — ack);
+  задача з окремим строком — коли її виконають. «+1 год» / «Завтра» — `store.snooze`. Агент: task з `at` (строк) і `remind`; «нагадай про цю задачу» — update з remind, без нової задачі.
+  Картка задачі: рядок «Нагадати» (у час строку, за 15 хв / годину, свій час, не нагадувати). Рядок списку: «📅 22:00 · 🔔 17:00» або «🔔 17:00».
 - Оформлення повідомлень (константа `FORMAT` у lib/assistant.js — для reply агента, ранкового плану й підсумку; шаблони в lib/telegram.js — так само):
   суть першим реченням, перелік — кожен пункт з нового рядка через «• », групи — абзацами з назвою («Сьогодні:», «Задачі:»), час на початку пункту,
-  без Markdown, емодзі — одне-два на повідомлення й лише де доречно. Рядки виконаних дій — «• Задача: …», «• Нагадування … — …».
+  без Markdown, емодзі — одне-два на повідомлення й лише де доречно. Рядки виконаних дій — «• Задача: … (до …) · 🔔 …».
 - «Стиль спілкування» (налаштування, `style` в assistant_settings): промпт власника — додається до системного промпту агента (поле reply), ранкового плану й підсумку дня.
 - Логотип: «MDMY» чорним (Inter Display Black, контури) на білому — `public/favicon.svg`, `public/assistant/icon-*.png`, `badge-96.png`, словесний знак `js/logo.js`.
 - Звички (міграція v6, таблиці `habits`, `habit_marks` (habit_id, day, done 1/0)): `lib/habits.js` — серії, місяць для календаря, відмітки (лише сьогодні й минулі дні),
@@ -121,7 +126,7 @@
 - Асистент: `lib/assistant.js` (агент, таймер, API `/api/assistant/*`) + `lib/assistant-store.js` (усі зміни даних) + `lib/assistant-time.js` (часові пояси, повтори) + `lib/telegram.js` (бот).
   Агент: текст → Claude API (за замовч. `claude-haiku-5-5`) з інструментами `search_memory` (FTS по всьому сказаному) і фінальним `save_actions`;
   цикл до 4 запитів, `tool_choice` any → на останньому кроці примусово save_actions; для Opus/Sonnet/Fable/Mythos — `auto`.
-  Дії: reminder / task / note / complete / reopen / update / delete / undo / routine; поля area, status, description, tags, priority (0–2), parent_id, repeat {freq, interval, days}; для routine — times / every+from+to / days / icon.
+  Дії: task / note / complete / reopen / update / delete / undo / routine / habit (reminder — стара назва task з remind = at); поля at (строк), remind, clear_remind, area, status, description, tags, priority (0–2), parent_id, repeat {freq, interval, days}; для routine — times / every+from+to / days / icon.
   Простір задачі (`area`): агент визначає за змістом, тегами, описами просторів і тим, як розкладені схожі задачі; незрозуміле — у `inbox` («Вхідні»).
   Підзадачі успадковують простір батька, перенесення задачі переносить і підзадачі. Агент також ставить `status` («почав» → doing, «чекаю» → waiting) і `description`.
   `/api/assistant/triage` — підказки Claude для «Вхідних» (нічого не змінює). Telegram `/inbox` — кнопки просторів під кожною задачею.
