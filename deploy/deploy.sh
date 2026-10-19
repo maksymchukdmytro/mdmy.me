@@ -61,6 +61,17 @@ mkdir -p "$APP_DIR" "$DATA_DIR" "$BACKUP_DIR"
 rsync -a --delete --exclude node_modules --exclude data --exclude '.git' --exclude '.npm' "$SRC_DIR/" "$APP_DIR/"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR" "$BACKUP_DIR"
 chmod 750 "$DATA_DIR" "$BACKUP_DIR"
+# Головний ключ шифрування баз і секретів (lib/keys.js) — поза базою й поза резервними копіями. Втратите ключ — втратите дані.
+install -d -m 750 -o root -g "$APP_USER" /etc/mdmy
+if [ ! -s /etc/mdmy/secret.key ]; then
+  if [ -f "$DATA_DIR/.key-id" ]; then
+    warn "Бази вже зашифровані, а ключа /etc/mdmy/secret.key немає — поверніть його з копії, інакше сайт не запуститься."
+  else
+    ( umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /etc/mdmy/secret.key; echo >> /etc/mdmy/secret.key )
+    NEW_KEY=1
+  fi
+fi
+[ -f /etc/mdmy/secret.key ] && { chown root:"$APP_USER" /etc/mdmy/secret.key; chmod 640 /etc/mdmy/secret.key; }
 cd "$APP_DIR"
 sudo -u "$APP_USER" env HOME="$APP_DIR" npm ci --omit=dev --no-audit --no-fund --cache "$APP_DIR/.npm"
 
@@ -95,6 +106,7 @@ ProtectSystem=full
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=$DATA_DIR $BACKUP_DIR
+Environment=MDMY_KEY_FILE=/etc/mdmy/secret.key
 
 [Install]
 WantedBy=multi-user.target
@@ -108,7 +120,8 @@ if [ -f "$DATA_DIR/mdmy.db" ] && systemctl is-active --quiet mdmy; then
   ls -1t "$BACKUP_DIR"/pre-update-*.db 2>/dev/null | tail -n +6 | xargs -r rm -f
 fi
 systemctl restart mdmy
-sleep 2
+# перший запуск після ввімкнення шифрування шифрує бази на місці — це може тривати довше
+for i in $(seq 1 30); do sleep 1; curl -fsS "http://127.0.0.1:$PORT/api/ping" >/dev/null 2>&1 && break; done
 curl -fsS "http://127.0.0.1:$PORT/api/ping" >/dev/null || { journalctl -u mdmy -n 40 --no-pager; die "Сайт не запустився (журнал вище)."; }
 echo "Сайт працює на 127.0.0.1:$PORT"
 
@@ -186,6 +199,7 @@ echo "  Сайт:        $SCHEME://$DOMAIN"
 echo "  Асистент:    $SCHEME://$DOMAIN/assistant/"
 echo "  Накладні:    $SCHEME://$DOMAIN/nakladna/"
 [ -n "$ACCOUNT_INFO" ] && printf '\n%s\n' "$ACCOUNT_INFO"
+[ "${NEW_KEY:-0}" = 1 ] && warn "Створено ключ шифрування /etc/mdmy/secret.key — збережіть його копію окремо від сервера (без нього бази й копії не відкрити)."
 echo
 echo "  Журнал:           journalctl -u mdmy -f"
 echo "  Перезапуск:       systemctl restart mdmy"

@@ -13,7 +13,7 @@
 | Telegram Web App | `POST /api/auth/telegram {initData}` → `{token}` + cookie. Вхід у той обліковий запис, до якого привʼязаний цей Telegram (підпис `initData` перевіряється токеном бота). |
 
 Сесія живе 30 днів від останньої активності. `POST /api/logout` — вийти, `GET /api/me` — поточний обліковий запис (`{id, login, name, admin, demo, email, google, hasPassword, own, googleOn}`; `demo` — гостьовий вхід з окремими демо-даними),
-`GET /api/sessions` — активні входи, `POST /api/account/reset {confirm: "ОЧИСТИТИ"}` — стерти всі записи (акаунт лишається), `POST /api/account/delete {confirm: "ВИДАЛИТИ"}` — видалити акаунт і його базу, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `POST /api/password {old, password}`.
+`GET /api/sessions` — активні входи, `POST /api/account/reset {confirm: "ОЧИСТИТИ"}` — стерти всі записи (акаунт лишається), `POST /api/account/delete {confirm: "ВИДАЛИТИ"}` — видалити акаунт і його базу, `DELETE /api/sessions/others` — вийти на всіх інших пристроях, `GET /api/account/quota` → `{quota: {used, limit, today, perDay} | null}` — місце для файлів (окремі бази, крім адмінів: 50 МБ разом і 10 завантажень на добу; понад ліміт завантаження файлу → 413 з `error`, посилання не рахуються), `POST /api/password {old, password}`.
 Обмеження: 8 спроб входу за 10 хвилин з однієї адреси.
 
 ## Модель даних

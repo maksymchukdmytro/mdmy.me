@@ -11,12 +11,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const DB = require('./lib/db');
+const keys = require('./lib/keys');
 const { send } = require('./lib/util');
 
 const PORT = process.env.PORT || 3001;
 const PUBLIC = path.join(__dirname, 'public');
 const DATA = process.env.DATA_DIR || path.join(__dirname, 'data');
 const db = DB.open(DATA);
+// старі незашифровані знімки й окремі бази (наприклад, вимкнених акаунтів) — зашифрувати одразу; основну вже відкрито й зашифровано
+try { const n = DB.encryptPlainFiles(DATA, 2, new Set([path.resolve(db.file)])); if (n) console.log(`[db] зашифровано старих файлів: ${n}`); } catch (e) { console.error('[db]', e.message); }
 const auth = require('./lib/auth')(db);
 const nakladna = require('./lib/nakladna')(db, auth.log);
 const stt = require('./lib/stt')();
@@ -60,6 +63,44 @@ function allowAI(ws) {
   aiUse.set(ws, { day, n });
   return n <= limit;
 }
+// Ліміт файлів для облікових записів з окремою базою (крім адмінів): разом до 50 МБ (вкладення, фото й відео, докази)
+// і не більше 10 завантажених файлів на добу. Посилання ({url}) не рахуються. Лічильник дня — у meta upload_use основної бази.
+const QUOTA_BYTES = 50 * 1024 * 1024, QUOTA_DAY = 10;
+const UPLOAD_RE = /^\/api\/(routines\/media|assistant\/items\/\d+\/attachments|team\/tasks\/\d+\/files|challenges\/\d+\/files(\/\d+)?)$/;
+const isUpload = (req, url) => req.method === 'POST' && UPLOAD_RE.test(url) && !/json/.test(req.headers['content-type'] || '');
+function dirSize(d) {
+  let n = 0;
+  try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); n += e.isDirectory() ? dirSize(f) : e.isFile() ? fs.statSync(f).size : 0; } } catch (e) {}
+  return n;
+}
+function storageUsed(a) {
+  const dir = DB.wsDir(DATA, a.ws);
+  return dirSize(path.join(dir, 'files')) + dirSize(path.join(dir, 'media')) +
+    (db.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM shared_files WHERE by_account = ?').get(a.id).n || 0);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+function uploadUse() { try { return JSON.parse((db.prepare("SELECT value FROM meta WHERE key = 'upload_use'").get() || {}).value || '{}'); } catch (e) { return {}; } }
+const uploadsToday = a => { const u = uploadUse()[a.id]; return u && u.day === today() ? u.n : 0; };
+function noteUpload(a) {
+  const all = uploadUse(), d = today();
+  for (const k of Object.keys(all)) if (all[k].day !== d) delete all[k];
+  all[a.id] = { day: d, n: (all[a.id] && all[a.id].day === d ? all[a.id].n : 0) + 1 };
+  db.prepare("INSERT INTO meta (key, value) VALUES ('upload_use', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(all));
+}
+const hasQuota = a => !!a.ws && a.role !== 'admin';
+function quotaView(a) {
+  if (!hasQuota(a)) return null;
+  return { used: storageUsed(a), limit: QUOTA_BYTES, today: uploadsToday(a), perDay: QUOTA_DAY };
+}
+function uploadBlocked(a, req, url, res) {
+  if (!hasQuota(a) || !isUpload(req, url)) return null;
+  if (uploadsToday(a) >= QUOTA_DAY) return `На сьогодні вже завантажено ${QUOTA_DAY} файлів — це ліміт на добу. Посилання можна додавати й далі.`;
+  const len = +req.headers['content-length'] || 0;
+  if (storageUsed(a) + len > QUOTA_BYTES) return 'Місце для файлів закінчилось (50 МБ). Видаліть непотрібні вкладення або додайте посилання.';
+  res.on('finish', () => { if (res.statusCode < 300) { try { noteUpload(a); } catch (e) {} } });
+  return null;
+}
+
 function blocked(a, req, url) {
   if (url.startsWith('/api/nakladna/') && a.ws) return 'Накладні доступні лише власнику.';
   if (!a.ws) return null;
@@ -71,9 +112,13 @@ function blocked(a, req, url) {
 
 // Медіа окремих баз (/m/u5/<файл>): лише власнику за сесією або за підписаним посиланням (Telegram і сповіщення забирають файл без входу).
 function mediaSecret() {
+  if (mediaSecret.v) return mediaSecret.v;
   const row = db.prepare("SELECT value FROM meta WHERE key = 'media_secret'").get();
-  if (row) return row.value;
-  const v = crypto.randomBytes(32).toString('hex'); db.prepare("INSERT INTO meta (key, value) VALUES ('media_secret', ?)").run(v); return v;
+  if (row) {
+    if (!keys.isSealed(row.value)) db.prepare("UPDATE meta SET value = ? WHERE key = 'media_secret'").run(keys.seal(row.value));
+    return (mediaSecret.v = keys.unseal(row.value));
+  }
+  const v = crypto.randomBytes(32).toString('hex'); db.prepare("INSERT INTO meta (key, value) VALUES ('media_secret', ?)").run(keys.seal(v)); return (mediaSecret.v = v);
 }
 const mediaMac = (p, e) => crypto.createHmac('sha256', mediaSecret()).update(`${p}.${e}`).digest('base64url').slice(0, 32);
 function signMedia(u) { const e = Date.now() + 7 * 864e5; return `${u}?e=${e}&s=${mediaMac(u, e)}`; }
@@ -215,7 +260,7 @@ const CSP_APP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'u
 
 // ---------- API ----------
 async function api(req, res, url) {
-  if (url === '/api/ping') return send(res, 200, { ok: true });
+  if (url === '/api/ping') return send(res, 200, { ok: true, encrypted: DB.encrypted });
   if (url === '/api/push/action' && req.method === 'POST') {    // кнопка в сповіщенні, без сесії; токен «u5~…» — з окремої бази
     const b = await readBody(req, 2048), m = /^(u\d+)~/.exec((b && b.token) || '');
     if (m && !db.prepare('SELECT 1 FROM accounts WHERE ws = ?').get(m[1])) return send(res, 404, { error: 'Посилання застаріло.' });
@@ -225,6 +270,9 @@ async function api(req, res, url) {
   if (!a) return;                                            // відповідь уже надіслано (вхід, вихід, помилка доступу)
   const no = blocked(a, req, url);
   if (no) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: no });
+  const full = uploadBlocked(a, req, url, res);
+  if (full) { req.resume(); return send(res, 413, { error: full }); }
+  if (url === '/api/account/quota' && req.method === 'GET') return send(res, 200, { quota: quotaView(a) });
   if (url.startsWith('/api/account/')) return account(req, res, url, a);
   if (/^\/api\/admin\/users\/\d+$/.test(url)) return adminUser(req, res, url, a);
   if (url.startsWith('/api/admin/')) return auth.google.admin(req, res, url, a);

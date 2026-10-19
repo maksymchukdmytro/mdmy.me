@@ -65,6 +65,13 @@
 - Ролі (міграція v7, `accounts.role`: admin / user / demo): «Асистент» (ключ Claude, модель) і токен бота бачить і змінює лише admin; привʼязати свій Telegram може кожен;
   якщо адміна немає, ним стає найперший обліковий запис (`ensureAdmin` у db.js). `manage.js admin|user <логін>`; `manage.js create` — перший акаунт власник (основна база), решта — з окремою базою.
   Адмін у «Користувачах»: вимкнути / увімкнути вхід, «Дати окрему базу» старим акаунтам без неї (бачать записи власника), видалити з даними (`POST /api/admin/users/:id`).
+- Шифрування на диску (`lib/keys.js`): усі бази (основна, `ws/u5/mdmy.db`, знімки, резервні копії) — SQLite3 Multiple Ciphers (пакет `better-sqlite3-multiple-ciphers`, optionalDependencies;
+  без нього — звичайний better-sqlite3 без шифрування). Головний ключ — `/etc/mdmy/secret.key` (32 байти hex, root:mdmy 640, створює deploy.sh; служба — `MDMY_KEY_FILE`),
+  для розробки — `DATA_DIR/.mdmy-key`. Ключ бази = HMAC(головний, 'db:main' | 'db:u5'), `DB.openFile(file, label)`; відкрита стара база шифрується на місці (rekey), `DB.encryptPlainFiles` — старі знімки.
+  `DATA_DIR/.key-id` — відбиток ключа: з іншим ключем сервер не стартує. Секрети в meta (ключ Claude, токен бота, секрет Google, ключ CRM, VAPID, media_secret) — AES-256-GCM `enc1:…`
+  (`keys.seal/unseal`, перелік — `SEALED` у db.js). Файли вкладень і медіа не шифруються. Втрата ключа = втрата даних: копія ключа — окремо від сервера.
+- Ліміт файлів (server.js `uploadBlocked`): окремі бази, крім адмінів, — 50 МБ разом (files + media + докази) і 10 завантажень на добу (meta `upload_use`); налаштування → «Обліковий запис» показує використання.
+- Разові облікові записи (`SEED` у db.js, лише хеш пароля): admin (роль admin, основна база) — створюється один раз під час оновлення.
 - Безпека сторінок: CSP для /assistant/ (лише власні скрипти, без inline), HSTS, Referrer-Policy, Permissions-Policy (server.js `SECURITY`, `CSP_APP`);
   перебір ID і кодів челенджів — не більше 20 спроб за 10 хв на акаунт.
 - Окремі бази облікових записів (міграція v8, `accounts.ws`): `DATA_DIR/ws/<ws>/mdmy.db` (+ `media/`) — свої задачі, нотатки, звички, ритуали, push;
@@ -85,7 +92,8 @@
   для основної бази перед цим знімок `DATA_DIR/mdmy-before-reset-<дата>.db`; гостю — знову демо-дані. «Видалити акаунт» (`delete`, слово ВИДАЛИТИ) — лише для окремих баз:
   зупиняє її таймери, видаляє теку `ws/<ws>` і обліковий запис. Ліміт асистента для користувачів — `userLimit` на день (гість — 40), `allowAI` у server.js.
   Медіа окремих баз `/m/u5/<файл>` — лише за сесією власника або підписаним посиланням `?e=…&s=…` (HMAC, meta `media_secret`, 7 днів) для Telegram і push.
-  Резервні копії: `manage.js backup <файл>` зберігає й окремі бази в теку `<файл без .db>-ws/` (14 останніх). Сторінка `public/privacy.html` (контакт — з `auth/config`).
+  Резервні копії: `manage.js backup <файл>` (VACUUM INTO — копія зашифрована тим самим ключем) зберігає й окремі бази в теку `<файл без .db>-ws/` (14 останніх);
+  старі незашифровані копії в тій самій теці шифрує на місці. Сторінка `public/privacy.html` (контакт — з `auth/config`).
 - Вкладення (міграція v10, таблиця `attachments` у базі власника записів, файли `<тека бази>/files/<32 hex>.<ext>`; `lib/files.js` — збереження сирого body,
   типи, до 25 МБ, віддача з nosniff і CSP sandbox): `POST /api/assistant/items/:id/attachments` (файл або `{url}`), `DELETE /api/assistant/attachments/:id`,
   `GET /api/assistant/files/<ключ>` — лише за сесією власника бази. У задачі — `attachments`, у списку — `att` (лічильник). Фронтенд — `views/attach.js` (фото зменшуються до 2048 px).

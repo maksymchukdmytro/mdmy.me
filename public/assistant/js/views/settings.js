@@ -98,6 +98,7 @@ export function settingsPage(sub) {
         <h2>Обліковий запис</h2>
         <div class="acc-who"></div>
         <div class="acc-google"></div>
+        <div class="acc-quota"></div>
         <div class="acc-pass">
           <div class="kv acc-old"><span>Поточний пароль</span><div><input type="password" data-p="old" autocomplete="current-password"></div></div>
           <div class="kv"><span class="acc-new-l">Новий пароль</span><div><input type="password" data-p="new" autocomplete="new-password" placeholder="щонайменше 8 символів"></div></div>
@@ -194,6 +195,16 @@ export function settingsPage(sub) {
     $('.acc-del', root).hidden = me.own || me.demo;
     $('.acc-pass', root).hidden = me.demo;                        // гостьовий пароль спільний
     if (me.admin) { loadGoogle(); loadUsers(); }
+    loadQuota();
+  }
+  // місце для файлів: 50 МБ і 10 завантажень на добу (адміни й основна база — без ліміту)
+  async function loadQuota() {
+    let q; try { q = (await get('account/quota')).quota; } catch (e) { return; }
+    const el = $('.acc-quota', root); if (!q) { el.innerHTML = ''; return; }
+    const mb = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.0', '');
+    const pct = Math.min(100, Math.round(q.used / q.limit * 100));
+    el.innerHTML = `<div class="quota"><div class="quota-l"><span>Файли</span><span class="muted small">${mb(q.used)} з ${mb(q.limit)} МБ · сьогодні ${q.today} з ${q.perDay}</span></div>
+      <div class="quota-bar"><i style="width:${pct}%"></i></div></div>`;
   }
   async function loadGoogle() {
     let g; try { g = await get('admin/auth'); } catch (e) { return; }

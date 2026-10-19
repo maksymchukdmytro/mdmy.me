@@ -58,26 +58,34 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
     if (!list.length) console.log('Облікових записів ще немає.');
     list.forEach(a => console.log(`${a.login.padEnd(20)} ${a.name}${a.role === 'admin' ? '  (адмін)' : a.role === 'demo' ? '  (гість, окрема база)' : ''}${a.disabled ? '  (вимкнено)' : ''}`));
   } else if (cmd === 'backup') {
+    // VACUUM INTO: копія зашифрована тим самим ключем, що й база (резервний API SQLite з шифруванням не працює)
+    const fs = require('fs'), q = f => `'${path.resolve(f).replace(/'/g, "''")}'`;
     const out = login || `mdmy-backup-${Date.now()}.db`;
-    await db.backup(out);
-    console.log('Резервну копію збережено:', out);
+    if (fs.existsSync(out)) fs.rmSync(out);
+    db.exec(`VACUUM INTO ${q(out)}`);
+    console.log('Резервну копію збережено:', out, DB.encrypted ? '(зашифровано)' : '(без шифрування)');
     // окремі бази користувачів (DATA_DIR/ws/<ws>/mdmy.db) — у теку поруч: mdmy-2026-10-19-ws/u5.db; зберігаються 14 останніх тек
-    const wsRoot = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'ws'), fs = require('fs');
+    const wsRoot = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'ws');
+    const parent = path.dirname(path.resolve(out));
     if (fs.existsSync(wsRoot)) {
       const dir = out.replace(/\.db$/, '') + '-ws';
       fs.mkdirSync(dir, { recursive: true });
       let n = 0;
       for (const ws of fs.readdirSync(wsRoot)) {
-        const f = path.join(wsRoot, ws, 'mdmy.db');
+        const f = path.join(wsRoot, ws, 'mdmy.db'), to = path.join(dir, ws + '.db');
         if (!/^u\d+$/.test(ws) || !fs.existsSync(f)) continue;
-        const Database = require('better-sqlite3'), src = new Database(f, { readonly: true, fileMustExist: true });
-        try { await src.backup(path.join(dir, ws + '.db')); n++; } finally { src.close(); }
+        try {
+          const src = DB.openFile(f, ws, { readonly: true, fileMustExist: true });
+          try { if (fs.existsSync(to)) fs.rmSync(to); src.exec(`VACUUM INTO ${q(to)}`); n++; } finally { src.close(); }
+        } catch (e) { console.error(`${ws}: ${e.message}`); }
       }
       console.log(`Окремих баз збережено: ${n} → ${dir}`);
-      const parent = path.dirname(path.resolve(dir));
       fs.readdirSync(parent).filter(x => /^mdmy-.+-ws$/.test(x)).map(x => ({ x, t: fs.statSync(path.join(parent, x)).mtimeMs }))
         .sort((a, b) => b.t - a.t).slice(14).forEach(({ x }) => fs.rmSync(path.join(parent, x), { recursive: true, force: true }));
     }
+    // старі копії, зроблені ще до шифрування, — зашифрувати на місці
+    const enc = DB.encryptPlainFiles(parent, 1);
+    if (enc) console.log(`Зашифровано старих копій: ${enc}`);
   } else if (cmd === 'import') {
     try {
       const r = require('./lib/import-octotype')(db, login);
