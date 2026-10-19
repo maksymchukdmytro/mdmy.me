@@ -25,6 +25,9 @@ const nakladna = require('./lib/nakladna')(db, auth.log);
 const stt = require('./lib/stt')();
 const assistant = require('./lib/assistant').get(db);
 const push = require('./lib/push').get(db);
+// статистика для адмінки: день — за часовим поясом власника
+const usage = require('./lib/usage');
+usage.init(db, () => assistant.settings().tz || 'Europe/Kyiv');
 const { readBody } = require('./lib/util');
 
 // ---------- окремі бази облікових записів (accounts.ws, див. lib/db.js v8) ----------
@@ -51,21 +54,17 @@ function closeWorkspace(ws) {
   try { w.db.close(); } catch (e) {}
 }
 
-// Денний ліміт запитів до Claude для окремих баз: гостьовий вхід — 40, решта — як задав адміністратор (0 — без обмежень).
-// Повідомлення асистенту рахує сам асистент через allow — і з сайту, і з Telegram.
-const DEMO_LIMIT = 40, aiUse = new Map();
+// Денний ліміт запитів до асистента для окремих баз (адмінка → «Ліміти»: загальний, для гостя, особистий; 0 — без обмежень).
+// Повідомлення асистенту рахує сам асистент через allow — і з сайту, і з Telegram. Лічильник — usage_daily (kind msg).
 function allowAI(ws) {
-  const acc = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
-  const limit = acc && acc.role === 'demo' ? DEMO_LIMIT : auth.google.settings().userLimit;
-  if (!limit) return true;
-  const day = new Date().toISOString().slice(0, 10), u = aiUse.get(ws);
-  const n = u && u.day === day ? u.n + 1 : 1;
-  aiUse.set(ws, { day, n });
-  return n <= limit;
+  const acc = db.prepare('SELECT * FROM accounts WHERE ws = ?').get(ws);
+  const limit = admin.limitsFor(acc).ai;
+  if (limit && admin.used(ws, 'msg').n >= limit) return false;
+  usage.note(ws, 'msg');
+  return true;
 }
-// Ліміт файлів для облікових записів з окремою базою (крім адмінів): разом до 50 МБ (вкладення, фото й відео, докази)
-// і не більше 10 завантажених файлів на добу. Посилання ({url}) не рахуються. Лічильник дня — у meta upload_use основної бази.
-const QUOTA_BYTES = 50 * 1024 * 1024, QUOTA_DAY = 10;
+// Ліміт файлів для облікових записів з окремою базою (крім адмінів): місце разом (вкладення, фото й відео, докази) і завантажень на добу —
+// з адмінки («Ліміти», за замовчуванням 50 МБ і 10). Посилання ({url}) не рахуються. Лічильник дня — usage_daily (kind upload).
 const UPLOAD_RE = /^\/api\/(routines\/media|assistant\/items\/\d+\/attachments|team\/tasks\/\d+\/files|challenges\/\d+\/files(\/\d+)?)$/;
 const isUpload = (req, url) => req.method === 'POST' && UPLOAD_RE.test(url) && !/json/.test(req.headers['content-type'] || '');
 function dirSize(d) {
@@ -78,26 +77,19 @@ function storageUsed(a) {
   return dirSize(path.join(dir, 'files')) + dirSize(path.join(dir, 'media')) +
     (db.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM shared_files WHERE by_account = ?').get(a.id).n || 0);
 }
-const today = () => new Date().toISOString().slice(0, 10);
-function uploadUse() { try { return JSON.parse((db.prepare("SELECT value FROM meta WHERE key = 'upload_use'").get() || {}).value || '{}'); } catch (e) { return {}; } }
-const uploadsToday = a => { const u = uploadUse()[a.id]; return u && u.day === today() ? u.n : 0; };
-function noteUpload(a) {
-  const all = uploadUse(), d = today();
-  for (const k of Object.keys(all)) if (all[k].day !== d) delete all[k];
-  all[a.id] = { day: d, n: (all[a.id] && all[a.id].day === d ? all[a.id].n : 0) + 1 };
-  db.prepare("INSERT INTO meta (key, value) VALUES ('upload_use', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(all));
-}
 const hasQuota = a => !!a.ws && a.role !== 'admin';
 function quotaView(a) {
   if (!hasQuota(a)) return null;
-  return { used: storageUsed(a), limit: QUOTA_BYTES, today: uploadsToday(a), perDay: QUOTA_DAY };
+  const L = admin.limitsFor(a);
+  if (!L.storageMb && !L.uploadsDay) return null;
+  return { used: storageUsed(a), limit: L.storageMb * 1048576, today: admin.used(a.ws, 'upload').n, perDay: L.uploadsDay };
 }
 function uploadBlocked(a, req, url, res) {
   if (!hasQuota(a) || !isUpload(req, url)) return null;
-  if (uploadsToday(a) >= QUOTA_DAY) return `На сьогодні вже завантажено ${QUOTA_DAY} файлів — це ліміт на добу. Посилання можна додавати й далі.`;
-  const len = +req.headers['content-length'] || 0;
-  if (storageUsed(a) + len > QUOTA_BYTES) return 'Місце для файлів закінчилось (50 МБ). Видаліть непотрібні вкладення або додайте посилання.';
-  res.on('finish', () => { if (res.statusCode < 300) { try { noteUpload(a); } catch (e) {} } });
+  const L = admin.limitsFor(a), len = +req.headers['content-length'] || 0;
+  if (L.uploadsDay && admin.used(a.ws, 'upload').n >= L.uploadsDay) return `На сьогодні вже завантажено ${L.uploadsDay} файлів — це ліміт на добу. Посилання можна додавати й далі.`;
+  if (L.storageMb && storageUsed(a) + len > L.storageMb * 1048576) return `Місце для файлів закінчилось (${L.storageMb} МБ). Видаліть непотрібні вкладення або додайте посилання.`;
+  res.on('finish', () => { if (res.statusCode < 300) usage.note(a.ws, 'upload', 1, len); });
   return null;
 }
 
@@ -144,33 +136,8 @@ function notify(accountId, title, text, url) {
 }
 const team = require('./lib/team')(db, { dataDir: DATA, notify, todayOf });
 
-// ---------- адміністратор: керування обліковими записами ----------
-//  disable / enable — вимкнути вхід (сесії завершуються); separate — акаунту без окремої бази (старий, спільний з власником) дати власну порожню;
-//  delete — видалити акаунт з окремою базою разом із даними.
-async function adminUser(req, res, url, a) {
-  if (a.role !== 'admin') return send(res, 403, { error: 'Лише для адміністратора.' });
-  if (req.method !== 'POST') return send(res, 405, { error: 'Метод не підтримується.' });
-  const id = +url.split('/').pop(), u = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id);
-  if (!u) return send(res, 404, { error: 'Акаунт не знайдено.' });
-  if (u.id === a.id || u.role === 'admin') return send(res, 400, { error: 'Адміністратора тут змінювати не можна.' });
-  const b = await readBody(req, 1024) || {};
-  if (b.action === 'disable' || b.action === 'enable') {
-    db.prepare('UPDATE accounts SET disabled = ? WHERE id = ?').run(b.action === 'disable' ? 1 : 0, id);
-    if (b.action === 'disable') db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
-  } else if (b.action === 'separate') {
-    if (u.ws) return send(res, 400, { error: 'У цього акаунта вже окрема база.' });
-    db.prepare('UPDATE accounts SET ws = ? WHERE id = ?').run('u' + id, id);
-    db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
-  } else if (b.action === 'delete') {
-    if (!u.ws) return send(res, 400, { error: 'Спершу дайте акаунту окрему базу — інакше його дані змішані з вашими.' });
-    team.forgetAccount(id); closeWorkspace(u.ws);
-    try { fs.rmSync(DB.wsDir(DATA, u.ws), { recursive: true, force: true }); } catch (e) {}
-    db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
-    db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
-  } else return send(res, 400, { error: 'Невідома дія.' });
-  auth.log(a, 'admin:user', u.login, { action: b.action });
-  return send(res, 200, { ok: true });
-}
+// ---------- адмінка (/admin/, lib/admin.js): огляд, користувачі, ліміти ----------
+const admin = require('./lib/admin')(db, { DATA, DB, workspace, closeWorkspace, team, auth, stt: require('./lib/stt') });
 
 // ---------- «Почати спочатку» і видалення акаунта ----------
 const wipe = require('./lib/wipe');
@@ -235,7 +202,7 @@ auth.setTelegramLookup(uid => {
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
                 '.png':'image/png', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.txt':'text/plain; charset=utf-8',
                 '.webmanifest':'application/manifest+json' };
-const SECTIONS = ['nakladna', 'assistant'];                 // сторінки, що працюють лише після входу
+const SECTIONS = ['nakladna', 'assistant', 'admin'];                 // сторінки, що працюють лише після входу
 const REDIRECTS = { '/speachtotext': '/assistant/', '/speachtotext/': '/assistant/', '/speechtotext': '/assistant/', '/speechtotext/': '/assistant/' };
 
 function serveStatic(req, res, url) {
@@ -254,6 +221,7 @@ function serveStatic(req, res, url) {
       // CSP: скрипти лише власні (жодних inline і чужих) — навіть якщо десь проскочить вставка HTML, чужий код не виконається.
       if (top === 'assistant') headers['Content-Security-Policy'] = CSP_APP;
       else headers['X-Frame-Options'] = 'DENY';
+      if (top === 'admin') headers['Content-Security-Policy'] = CSP_ADMIN;
       headers['Cache-Control'] = rel.includes('vendor') ? 'public, max-age=604800' : 'no-cache';
     }
     res.writeHead(200, headers);
@@ -267,6 +235,9 @@ const SECURITY = { 'Strict-Transport-Security': 'max-age=31536000', 'Referrer-Po
 const CSP_APP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
                  "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", "frame-src https://www.youtube-nocookie.com", "connect-src 'self'",
                  "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self' https://web.telegram.org"].join('; ');
+// адмінка: лише власні скрипти й запити, жодних вбудовувань
+const CSP_ADMIN = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
+                   "img-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"].join('; ');
 
 // ---------- API ----------
 async function api(req, res, url) {
@@ -282,16 +253,17 @@ async function api(req, res, url) {
   if (no) return send(res, a.role !== 'nakladna' && (url.startsWith('/api/assistant/') || url.startsWith('/api/stt/')) ? 429 : 403, { error: no });
   const full = uploadBlocked(a, req, url, res);
   if (full) { req.resume(); return send(res, 413, { error: full }); }
+  usage.seen(a.id);
   if (url === '/api/account/quota' && req.method === 'GET') return send(res, 200, { quota: quotaView(a) });
   if (url.startsWith('/api/account/')) return account(req, res, url, a);
-  if (/^\/api\/admin\/users\/\d+$/.test(url)) return adminUser(req, res, url, a);
-  if (url.startsWith('/api/admin/')) return auth.google.admin(req, res, url, a);
+  if (url === '/api/admin/auth') return auth.google.admin(req, res, url, a);
+  if (url.startsWith('/api/admin/')) return admin.handle(req, res, url, a);
   if (url === '/api/team' || url.startsWith('/api/team/')) return team.handleTeam(req, res, url, a);
   if (url === '/api/challenges' || url.startsWith('/api/challenges/')) return team.handleChallenges(req, res, url, a);
   if (url.startsWith('/api/shared/')) return team.handleShared(req, res, url, a);
   const w = wsOf(a);
   if (url.startsWith('/api/nakladna/')) return nakladna.handle(req, res, url, a);
-  if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);
+  if (url.startsWith('/api/stt/')) return stt.handle(req, res, url, a.ws);
   if (url.startsWith('/api/assistant/')) return w.assistant.handle(req, res, url, a, auth.log);
   if (url === '/api/routines' || url.startsWith('/api/routines/')) return w.assistant.routines.handle(req, res, url);
   if (url === '/api/habits' || url.startsWith('/api/habits/')) return w.assistant.habits.handle(req, res, url);

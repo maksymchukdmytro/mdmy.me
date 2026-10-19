@@ -21,7 +21,7 @@
   Старі адреси `/speachtotext` → 301 на `/assistant/`.
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
-- `lib/db.js` — схема (PRAGMA user_version, зараз 11): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
+- `lib/db.js` — схема (PRAGMA user_version, зараз 12): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
   і таблиці асистента `assistant_*`. Нові зміни схеми — новою міграцією з наступним `user_version`.
 - `public/nakladna/` + `lib/nakladna.js` — видаткові накладні: LP-CRM getOrdersByID; короткий номер (напр. 353) шукається через getStatuses + getOrdersIdByStatus
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
@@ -70,7 +70,14 @@
   для розробки — `DATA_DIR/.mdmy-key`. Ключ бази = HMAC(головний, 'db:main' | 'db:u5'), `DB.openFile(file, label)`; відкрита стара база шифрується на місці (rekey), `DB.encryptPlainFiles` — старі знімки.
   `DATA_DIR/.key-id` — відбиток ключа: з іншим ключем сервер не стартує. Секрети в meta (ключ Claude, токен бота, секрет Google, ключ CRM, VAPID, media_secret) — AES-256-GCM `enc1:…`
   (`keys.seal/unseal`, перелік — `SEALED` у db.js). Файли вкладень і медіа не шифруються. Втрата ключа = втрата даних: копія ключа — окремо від сервера.
-- Ліміт файлів (server.js `uploadBlocked`): окремі бази, крім адмінів, — 50 МБ разом (files + media + докази) і 10 завантажень на добу (meta `upload_use`); налаштування → «Обліковий запис» показує використання.
+- Ліміт файлів (server.js `uploadBlocked`): окремі бази, крім адмінів, — за замовчуванням 50 МБ разом (files + media + докази) і 10 завантажень на добу (змінюється в адмінці); налаштування → «Обліковий запис» показує використання.
+- Адмінка (`/admin/`: `public/admin/admin.js`, `admin.css`; спільні модулі — з `/assistant/js/`; API — `lib/admin.js`, CSP `CSP_ADMIN`): лише роль admin.
+  Розділи: Огляд (користувачі, активні, утримання, активація, витрати Claude з прогнозом, голос, нагадування, сервер і копії), Користувачі (список і картка: цифри без змісту,
+  сесії, журнал, особисті ліміти, дії: вимкнути, вийти з пристроїв, роль, окрема база, видалити), Ліміти, Асистент (ключ, модель, ціни моделей), Telegram-бот, Вхід і реєстрація (Google).
+  Налаштування сервісу з особистих налаштувань прибрано (там лише посилання «Адмінка»). Статистика (міграція v12): `lib/usage.js` → `usage_daily` (день × база × вид:
+  `ai:<модель>` з токенами, `msg` — ліміт асистента, `stt` з секундами, `remind_ok|fail`, `upload` з байтами, `ai_error`) і `activity` (хто заходив у день). День — за часовим поясом власника.
+  Ліміти: meta `service_limits` {ai, aiDemo, storageMb, uploadsDay} + `accounts.limits` (особисті); адмін і основна база — без лімітів (`admin.limitsFor`). Ціни — meta `ai_prices` поверх стандартних.
+  `VERSION` (коміт і дата) пише deploy.sh; тека копій — `BACKUP_DIR`.
 - Роль `nakladna` — обліковий запис лише для накладних: `/api/nakladna/*`, решту API закриває `blocked` у server.js, `/assistant/` переводить на `/nakladna/` (`me.only`).
   Разові облікові записи (`SEED` у db.js, лише хеш пароля): `admin` (роль nakladna, основна база) — ставиться один раз під час оновлення.
 - Безпека сторінок: CSP для /assistant/ (лише власні скрипти, без inline), HSTS, Referrer-Policy, Permissions-Policy (server.js `SECURITY`, `CSP_APP`);

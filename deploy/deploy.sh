@@ -59,6 +59,8 @@ say "3/7 Користувач і файли сайту"
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
 mkdir -p "$APP_DIR" "$DATA_DIR" "$BACKUP_DIR"
 rsync -a --delete --exclude node_modules --exclude data --exclude '.git' --exclude '.npm' "$SRC_DIR/" "$APP_DIR/"
+# версія коду для адмінки (коміт і дата)
+git -C "$SRC_DIR" log -1 --format='%h · %cd' --date=format:'%Y-%m-%d %H:%M' > "$APP_DIR/VERSION" 2>/dev/null || true
 chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR" "$BACKUP_DIR"
 chmod 750 "$DATA_DIR" "$BACKUP_DIR"
 # Головний ключ шифрування баз і секретів (lib/keys.js) — поза базою й поза резервними копіями. Втратите ключ — втратите дані.
@@ -107,6 +109,7 @@ ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=$DATA_DIR $BACKUP_DIR
 Environment=MDMY_KEY_FILE=/etc/mdmy/secret.key
+Environment=BACKUP_DIR=$BACKUP_DIR
 
 [Install]
 WantedBy=multi-user.target

@@ -166,3 +166,19 @@
 | `POST /api/challenges/:id/files?day=` | Доказ до відмітки |
 | `POST /api/challenges/:id/review/:checkId {ok}` | Автор підтверджує / відхиляє |
 | `POST /api/challenges/:id/leave` | Вийти |
+
+## Адмінка (лише роль admin)
+
+Сторінка — `/admin/`. Усі відповіді — цифри без змісту записів.
+
+| Запит | Що робить |
+|---|---|
+| `GET /api/admin/overview` | Огляд: `users` (усього, нові за 1/7/30 днів, ряд за 30 днів), `active` (за день / 7 / 30, ряд), `retention` (d1/d7/d30: `{pct, base}`), `activation` (задачі, Telegram, сповіщення), `ai` (сьогодні, місяць, прогноз, за моделями, ряд витрат), `voice`, `reminders`, `uploads`, `server` (версія, памʼять, диск, копії, розшифровка) |
+| `GET /api/admin/users` | Список: `{id, login, name, email, role, ws, disabled, created, last_login, seen, google, limits, own, ai30: {n, cost}, shape: {tasks, open, notes, habits, routines, messages, telegram, push, storage}}` |
+| `GET /api/admin/users/:id` | Те саме + `sessions`, `activity` (30 днів), `usage`, `audit` |
+| `POST /api/admin/users/:id` | `{action}`: `disable` / `enable` / `logout` / `separate` / `role` (`{role: admin|user}`) / `limits` (`{limits: {ai, storageMb, uploadsDay}}`, null — загальний) / `delete` |
+| `GET/POST /api/admin/limits` | Загальні ліміти `{ai, aiDemo, storageMb, uploadsDay}` (0 — без обмежень) |
+| `GET/POST /api/admin/prices` | Ціни моделей ($ за 1 млн токенів): `{model, in, out}` або `{model, reset: true}` |
+| `GET/POST /api/admin/service` | Ключ Claude, модель, бот — як `/api/assistant/settings`, але завжди для основної бази |
+| `GET/POST /api/admin/auth` | Вхід через Google: Client ID, секрет, реєстрація, контакт |
+

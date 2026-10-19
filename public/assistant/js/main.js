@@ -90,6 +90,7 @@ function shell() {
       <a class="side-item" href="#/team" data-r="team">${icon('users')}<span>Доручення</span><b class="n badge" data-n="team"></b></a>
       <a class="side-item" href="#/challenges" data-r="challenges">${icon('trophy')}<span>Челенджі</span></a>
       <a class="side-item" href="#/settings" data-r="settings">${icon('settings')}<span>Налаштування</span></a>
+      ${account && account.admin ? `<a class="side-item" href="/admin/">${icon('activity')}<span>Адмінка</span></a>` : ''}
       <div class="side-stats" data-act="stats"></div>
       <div class="side-foot">
         <a class="side-item" href="/" title="Головна mdmy.me">${icon('home')}<span>mdmy.me</span></a>
@@ -185,6 +186,7 @@ function phoneMenu() {
       ${item('#/challenges', 'trophy', 'Челенджі', 0, 'challenges')}
       ${item('#/record', 'mic', 'Запис голосом', 0, 'record')}
       ${item('#/settings', 'settings', 'Налаштування', 0, 'settings')}
+      ${account && account.admin ? item('/admin/', 'activity', 'Адмінка', 0, 'admin') : ''}
     </div>`, { label: 'Меню' });
   s.el.addEventListener('click', e => {
     if (e.target.closest('[data-m="search"]')) { s.close(); return setTimeout(palette, 200); }
