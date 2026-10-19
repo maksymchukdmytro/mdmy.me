@@ -179,6 +179,10 @@
 | `POST /api/admin/users/:id` | `{action}`: `disable` / `enable` / `logout` / `separate` / `role` (`{role: admin|user}`) / `limits` (`{limits: {ai, storageMb, uploadsDay}}`, null — загальний) / `delete` |
 | `GET/POST /api/admin/limits` | Загальні ліміти `{ai, aiDemo, storageMb, uploadsDay}` (0 — без обмежень) |
 | `GET/POST /api/admin/prices` | Ціни моделей ($ за 1 млн токенів): `{model, in, out}` або `{model, reset: true}` |
+| `GET/POST /api/admin/budget` | Бюджет на Claude: `{usd, stop}` → `{usd, stop, cost, forecast, exceeded, month}`; сповіщення адмінам на 80% і 100% |
+| `GET /api/admin/backups` | Копії в `BACKUP_DIR`: `{list: [{name, at, size, ws, wsSize, kind: daily|update}], dir, check}` |
+| `POST /api/admin/backups` | `{action: "make"}` — зробити копію зараз (і перевірити), `{action: "verify"}` — перевірити свіжу |
+| `GET /api/admin/system` | Сервер, розмір баз і файлів, підписки на сповіщення, нагадування й помилки Claude за 14 днів, журнал оновлень |
 | `GET/POST /api/admin/service` | Ключ Claude, модель, бот — як `/api/assistant/settings`, але завжди для основної бази |
 | `GET/POST /api/admin/auth` | Вхід через Google: Client ID, секрет, реєстрація, контакт |
 

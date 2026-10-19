@@ -120,3 +120,8 @@ a.u-row:hover{background:var(--hover)}
 }
 .adm-page p .ic{display:inline-block;vertical-align:-2px;margin-right:3px}
 .tbl th.r{text-align:right}
+.box h3 .h-more{float:right;font-weight:500;text-decoration:none}
+.box h3 .h-more:hover{color:var(--text)}
+.logbox{margin:8px 0 0;max-height:280px;overflow:auto;padding:10px 12px;border-radius:8px;background:var(--bg-2);border:1px solid var(--line);font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
+.adm-head .btn .spin,.box .btn .spin{margin-right:4px}
+.meter-bar.over i{background:var(--red)}

@@ -77,7 +77,10 @@
   Налаштування сервісу з особистих налаштувань прибрано (там лише посилання «Адмінка»). Статистика (міграція v12): `lib/usage.js` → `usage_daily` (день × база × вид:
   `ai:<модель>` з токенами, `msg` — ліміт асистента, `stt` з секундами, `remind_ok|fail`, `upload` з байтами, `ai_error`) і `activity` (хто заходив у день). День — за часовим поясом власника.
   Ліміти: meta `service_limits` {ai, aiDemo, storageMb, uploadsDay} + `accounts.limits` (особисті); адмін і основна база — без лімітів (`admin.limitsFor`). Ціни — meta `ai_prices` поверх стандартних.
-  `VERSION` (коміт і дата) пише deploy.sh; тека копій — `BACKUP_DIR`.
+  `VERSION` (коміт і дата) пише deploy.sh; тека копій — `BACKUP_DIR`, журнал оновлень — `UPDATE_LOG` (/var/log/mdmy-update.log).
+  Бюджет на Claude (meta `ai_budget` {usd, stop}, стан сповіщень — `ai_budget_state`): вичерпано — асистент окремих баз (не адмінів) відмовляє (`opts.budget` у claude()),
+  адмінам — Telegram і push на 80% / 100% (`admin.tick` кожні 10 хв). Резервні копії: `lib/backup.js` (make / list / verify; спільне з manage.js), розділ «Резервні копії»
+  (зробити зараз, перевірити; автоперевірка свіжої копії раз на тиждень — meta `backup_check`, тривога, якщо копії не було понад 2 доби). Розділ «Система» — стан і журнал оновлень.
 - Роль `nakladna` — обліковий запис лише для накладних: `/api/nakladna/*`, решту API закриває `blocked` у server.js, `/assistant/` переводить на `/nakladna/` (`me.only`).
   Разові облікові записи (`SEED` у db.js, лише хеш пароля): `admin` (роль nakladna, основна база) — ставиться один раз під час оновлення.
 - Безпека сторінок: CSP для /assistant/ (лише власні скрипти, без inline), HSTS, Referrer-Policy, Permissions-Policy (server.js `SECURITY`, `CSP_APP`);

@@ -40,7 +40,7 @@ function workspace(ws) {
   let w = WS.get(ws); if (w) return w;
   const acc = db.prepare('SELECT role FROM accounts WHERE ws = ?').get(ws);
   const wdb = DB.open(DB.wsDir(DATA, ws));
-  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws, allow: () => allowAI(ws), signMedia: u => signMedia(u) });
+  const as = require('./lib/assistant').make(wdb, { shared: () => assistant.settings(), ws, allow: () => allowAI(ws), budget: () => admin.budgetAllows(ws), signMedia: u => signMedia(u) });
   w = { db: wdb, assistant: as, push: as.push, ws };
   WS.set(ws, w);
   if (acc && acc.role === 'demo') { try { require('./lib/demo')(wdb, as); } catch (e) { console.error('[demo] заповнення:', e.message); } }
@@ -137,7 +137,10 @@ function notify(accountId, title, text, url) {
 const team = require('./lib/team')(db, { dataDir: DATA, notify, todayOf });
 
 // ---------- адмінка (/admin/, lib/admin.js): огляд, користувачі, ліміти ----------
-const admin = require('./lib/admin')(db, { DATA, DB, workspace, closeWorkspace, team, auth, stt: require('./lib/stt') });
+const admin = require('./lib/admin')(db, { DATA, DB, workspace, closeWorkspace, team, auth, stt: require('./lib/stt'), notify });
+// бюджет на Claude і резервні копії: перевірка за хвилину після старту, далі кожні 10 хв
+setTimeout(() => admin.tick(), 60e3).unref();
+setInterval(() => admin.tick(), 10 * 60e3).unref();
 
 // ---------- «Почати спочатку» і видалення акаунта ----------
 const wipe = require('./lib/wipe');

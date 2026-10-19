@@ -11,7 +11,8 @@ const t = pref.get('theme', 'system'); if (t !== 'system') document.documentElem
 
 const NAV = [
   ['overview', 'Огляд', 'activity'], ['users', 'Користувачі', 'users'], ['limits', 'Ліміти', 'progress'],
-  ['ai', 'Асистент', 'sparkles'], ['bot', 'Telegram-бот', 'telegram'], ['signup', 'Вхід і реєстрація', 'key']
+  ['ai', 'Асистент', 'sparkles'], ['bot', 'Telegram-бот', 'telegram'], ['signup', 'Вхід і реєстрація', 'key'],
+  ['backups', 'Резервні копії', 'copy'], ['system', 'Система', 'settings']
 ];
 const ROLE = { admin: 'адмін', user: 'користувач', demo: 'гість', nakladna: 'лише накладні' };
 let me = null;
@@ -23,6 +24,7 @@ const usd = v => !v ? '$0' : v < 0.01 ? '<$0.01' : '$' + (v < 10 ? v.toFixed(2) 
 const mb = b => { b = b || 0; return b < 1048576 ? (b / 1024).toFixed(0) + ' КБ' : b < 1073741824 ? (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' МБ' : (b / 1073741824).toFixed(1) + ' ГБ'; };
 const mins = s => s < 60 ? Math.round(s) + ' с' : Math.round(s / 60) + ' хв';
 const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+const MONTHS = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'];
 const MON = ['січ', 'лют', 'бер', 'квіт', 'трав', 'черв', 'лип', 'серп', 'вер', 'жовт', 'лист', 'груд'];
 const dayLabel = d => `${+d.slice(8, 10)} ${MON[+d.slice(5, 7) - 1]}`;
 function ago(day) {
@@ -114,6 +116,8 @@ async function route() {
     else if (k === 'ai') await aiPage(main);
     else if (k === 'bot') await botPage(main);
     else if (k === 'signup') await signupPage(main);
+    else if (k === 'backups') await backupsPage(main);
+    else if (k === 'system') await systemPage(main);
     else await overviewPage(main);
   } catch (e) { main.innerHTML = `<div class="adm-page"><p class="err">${esc(e.message)}</p></div>`; }
 }
@@ -146,7 +150,7 @@ async function overviewPage(main) {
       ${tile('Активні сьогодні', num(o.active.d1), `7 днів: ${num(o.active.d7)} · 30 днів: ${num(o.active.d30)}`, 'activity')}
       ${tile('Повертаються через тиждень', ret(r.d7), `через день ${ret(r.d1)} · через місяць ${ret(r.d30)}`, 'repeat')}
       ${tile('Claude сьогодні', usd(o.ai.today.cost), `${num(o.ai.today.n)} запитів${o.ai.errors ? ` · помилок ${num(o.ai.errors)}` : ''}`, 'sparkles')}
-      ${tile('Claude за місяць', usd(o.ai.month.cost), `прогноз до кінця місяця ${usd(o.ai.forecast)}`, 'wallet')}
+      ${tile('Claude за місяць', usd(o.ai.month.cost), o.ai.budget.usd ? `з бюджету ${usd(o.ai.budget.usd)} · прогноз ${usd(o.ai.forecast)}${o.ai.month.cost >= o.ai.budget.usd ? ' · <span class="bad">вичерпано</span>' : ''}` : `прогноз до кінця місяця ${usd(o.ai.forecast)}`, 'wallet')}
       ${tile('Голос сьогодні', mins(o.voice.today.a), `${num(o.voice.today.n)} записів · за місяць ${mins(o.voice.month.a)}`, 'mic')}
       ${tile('Нагадування сьогодні', num(o.reminders.ok), o.reminders.fail ? `<span class="bad">не доставлено ${num(o.reminders.fail)}</span>` : `за тиждень ${num(o.reminders.week)}`, 'bell')}
       ${tile('Диск', s.disk ? mb(s.disk.free) + ' вільно' : '—', s.disk ? `зайнято ${pct(diskUsed, s.disk.total)}% · дані ${mb(s.data)}` : '', 'layers')}
@@ -176,7 +180,7 @@ async function overviewPage(main) {
     </section>
 
     <section class="box">
-      <h3>Сервер</h3>
+      <h3>Сервер <a class="h-more muted small" href="#/system">Система →</a></h3>
       <dl class="facts">
         <div><dt>Версія</dt><dd>${esc(s.version)}</dd></div>
         <div><dt>Працює без перезапуску</dt><dd>${dur(s.uptime)}</dd></div>
@@ -342,7 +346,7 @@ async function limitsPage(main) {
 
 // ---------- асистент ----------
 async function aiPage(main) {
-  const [s, p] = await Promise.all([get('admin/service'), get('admin/prices')]);
+  const [s, p, bu] = await Promise.all([get('admin/service'), get('admin/prices'), get('admin/budget')]);
   main.innerHTML = `<div class="adm-page">
     ${head('Асистент', 'Claude розбирає повідомлення, складає ранковий план і підсумок дня. Ключ зберігається на сервері зашифрованим і в браузер не віддається.')}
     <section class="box">
@@ -351,6 +355,17 @@ async function aiPage(main) {
         <p class="small">${s.hasKey ? `${icon('checkCircle', 13)} Ключ задано (${esc(s.keyHint)}) · <button type="button" class="link" data-a="clear-key">видалити</button>` : '<span class="bad">Ключ не задано — асистент не працює.</span>'} · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a></p></div></div>
       <div class="kv"><span>Модель</span><div><input data-f="model" value="${esc(s.model || '')}" placeholder="claude-haiku-5-5" spellcheck="false"><p class="muted small">Haiku — швидко й дешево, вистачає для задач і нагадувань. Sonnet / Opus — розумніше, у 20–40 разів дорожче.</p></div></div>
       <div class="row-act"><button type="button" class="btn sm primary" data-a="save">Зберегти</button></div>
+    </section>
+    <section class="box">
+      <h3>Бюджет на місяць</h3>
+      <div class="meter"><div class="meter-l"><span>${MONTHS[+bu.month.slice(5, 7) - 1][0].toUpperCase() + MONTHS[+bu.month.slice(5, 7) - 1].slice(1)}: ${usd(bu.cost)}${bu.usd ? ` з ${usd(bu.usd)}` : ''}</span><span class="muted small">прогноз до кінця місяця ${usd(bu.forecast)}</span></div>
+        ${bu.usd ? `<div class="meter-bar${bu.exceeded ? ' over' : ''}"><i style="width:${Math.min(100, pct(bu.cost, bu.usd))}%"></i></div>` : '<p class="muted small" style="margin:0">Бюджет не задано — витрати не обмежені.</p>'}</div>
+      ${bu.exceeded ? `<p class="bad small">Бюджет вичерпано${bu.stop ? ' — асистент для користувачів призупинено до 1-го числа.' : '.'}</p>` : ''}
+      <div class="kv"><span>Бюджет</span><div><div class="inline"><input type="number" min="0" step="1" data-b="usd" value="${bu.usd || ''}" placeholder="без бюджету" style="width:150px"><span class="muted small">$ на місяць</span></div>
+        <p class="muted small">Коли витрати дійдуть до 80% і до 100%, вам прийде сповіщення в Telegram і на пристрої.</p></div></div>
+      <div class="kv"><span>Коли вичерпано</span><div><label class="switch"><input type="checkbox" data-b="stop"${bu.stop ? ' checked' : ''}><span>зупиняти асистента для користувачів</span></label>
+        <p class="muted small">Для вас і інших адмінів асистент працює й далі.</p></div></div>
+      <div class="row-act"><button type="button" class="btn sm primary" data-a="budget">Зберегти бюджет</button></div>
     </section>
     <section class="box">
       <h3>Ціни моделей</h3>
@@ -372,6 +387,7 @@ async function aiPage(main) {
         await post('admin/service', body); toast('Збережено'); route();
       }
       if (k === 'clear-key' && await confirmBox('Видалити ключ Claude API? Асистент перестане працювати для всіх.')) { await post('admin/service', { clearKey: true }); route(); }
+      if (k === 'budget') { await post('admin/budget', { usd: +$('[data-b="usd"]', main).value || 0, stop: $('[data-b="stop"]', main).checked }); toast('Бюджет збережено'); route(); }
       const tr = b.closest('tr[data-m]');
       if (k === 'price' && tr) { await post('admin/prices', { model: tr.dataset.m, in: +$('[data-p="in"]', tr).value, out: +$('[data-p="out"]', tr).value }); toast('Ціну збережено'); route(); }
       if (k === 'price-reset' && tr) { await post('admin/prices', { model: tr.dataset.m, reset: true }); route(); }
@@ -437,4 +453,83 @@ async function signupPage(main) {
       }
     } catch (er) { fail(er); }
   });
+}
+
+// ---------- резервні копії ----------
+async function backupsPage(main) {
+  const r = await get('admin/backups');
+  const c = r.check, daily = r.list.filter(x => x.kind === 'daily'), last = daily[0];
+  const stale = !last || last.at < Date.now() - 2 * 864e5;
+  main.innerHTML = `<div class="adm-page">
+    ${head('Резервні копії', 'Щоночі о 03:30 сервер копіює всі бази. Копії зашифровані тим самим ключем, що й бази, — без файлу ключа їх не відкрити.', `<button type="button" class="btn sm primary" data-a="make">${icon('copy', 14)}Зробити копію зараз</button>`)}
+    <section class="tiles">
+      ${tile('Остання копія', last ? ago(new Date(last.at).toISOString().slice(0, 10)) : '—', last ? `${esc(fmtDate(last.at))} · ${mb(last.size + last.wsSize)}` : 'ще не було', 'copy')}
+      ${tile('Перевірка', c ? (c.ok ? 'Відкривається' : '<span class="bad">Помилка</span>') : '—', c ? `${esc(fmtDate(c.at))} · ${esc(c.file)}` : 'ще не перевіряли', 'checkCircle')}
+      ${tile('Зберігається', num(daily.length), `щоденних · перед оновленнями ${num(r.list.length - daily.length)}`, 'layers')}
+    </section>
+    ${r.error ? `<p class="err">${esc(r.error)} (${esc(r.dir)})</p>` : ''}
+    ${stale && !r.error ? '<p class="bad">Свіжої копії немає понад дві доби — перевірте розклад (cron) на сервері.</p>' : ''}
+    ${c && !c.ok ? `<section class="box"><h3 class="bad">Остання перевірка не пройшла</h3>${c.problems.map(p => `<p class="small">${esc(p)}</p>`).join('')}</section>` : ''}
+    <section class="box">
+      <h3>Перевірка</h3>
+      <p class="muted small">Раз на тиждень сервер сам відкриває свіжу копію ключем і перевіряє цілісність кожної бази. Якщо щось не так — прийде сповіщення.</p>
+      ${c ? `<dl class="facts"><div><dt>Файл</dt><dd>${esc(c.file)}</dd></div><div><dt>Облікових записів</dt><dd>${num(c.accounts)}</dd></div><div><dt>Окремих баз</dt><dd>${num(c.ws)}</dd></div><div><dt>Версія схеми</dt><dd>${num(c.version)}</dd></div></dl>` : ''}
+      <div class="row-act"><button type="button" class="btn sm" data-a="verify">${icon('checkCircle', 14)}Перевірити зараз</button></div>
+    </section>
+    <section class="box">
+      <h3>Копії</h3>
+      ${r.list.length ? `<table class="tbl"><thead><tr><th>Коли</th><th>Вид</th><th class="r">Основна</th><th class="r">Окремі бази</th></tr></thead><tbody>
+        ${r.list.map(x => `<tr><td>${esc(fmtDate(x.at))}</td><td>${x.kind === 'daily' ? 'щоденна' : 'перед оновленням'}</td><td class="r">${mb(x.size)}</td><td class="r">${x.ws ? `${num(x.ws)} · ${mb(x.wsSize)}` : '—'}</td></tr>`).join('')}
+      </tbody></table>` : '<p class="muted small">Копій ще немає.</p>'}
+      <p class="muted small">Тека: <code>${esc(r.dir)}</code>. Фото, відео й вкладення в копії не входять — лише бази.</p>
+    </section>
+  </div>`;
+  main.addEventListener('click', async e => {
+    const b = e.target.closest('[data-a]'); if (!b) return;
+    b.disabled = true; const was = b.innerHTML; b.innerHTML = '<span class="spin"></span>Зачекайте…';
+    try {
+      if (b.dataset.a === 'make') { const x = await post('admin/backups', { action: 'make' }); toast(`Копію зроблено: ${x.file}${x.check && x.check.ok ? ' · перевірено' : ''}`); }
+      if (b.dataset.a === 'verify') { const x = await post('admin/backups', { action: 'verify' }); toast(x.ok ? 'Копія відкривається, бази цілі' : 'Перевірка не пройшла'); }
+      route();
+    } catch (er) { fail(er); b.disabled = false; b.innerHTML = was; }
+  });
+}
+
+// ---------- система ----------
+async function systemPage(main) {
+  const x = await get('admin/system'), s = x.server, st = x.storage;
+  const memUsed = s.mem.total - s.mem.free;
+  const sum = a => a.reduce((n, d) => n + d.v, 0);
+  main.innerHTML = `<div class="adm-page">
+    ${head('Система', 'Стан сервера, служб і даних.', `<button type="button" class="btn sm" data-a="refresh">${icon('repeat', 14)}Оновити</button>`)}
+    <section class="tiles">
+      ${tile('Сайт', 'Працює', `версія ${esc(s.version)} · ${dur(s.uptime)} без перезапуску`, 'checkCircle')}
+      ${tile('Розшифровка голосу', s.stt ? 'Працює' : '<span class="bad">Не відповідає</span>', s.stt ? esc(s.stt.model || '') : 'служба dm-stt', 'mic')}
+      ${tile('Памʼять', `${pct(memUsed, s.mem.total)}%`, `${mb(memUsed)} з ${mb(s.mem.total)} · сайт ${mb(s.mem.app)}`, 'activity')}
+      ${tile('Диск', s.disk ? `${pct(s.disk.total - s.disk.free, s.disk.total)}%` : '—', s.disk ? `вільно ${mb(s.disk.free)} з ${mb(s.disk.total)}` : '', 'layers')}
+    </section>
+    <section class="cols">
+      <div class="box"><h3>Дані</h3><dl class="facts">
+        <div><dt>Основна база</dt><dd>${mb(st.main)}</dd></div>
+        <div><dt>Окремі бази</dt><dd>${num(st.wsCount)} · ${mb(st.ws)}</dd></div>
+        <div><dt>Фото, відео, вкладення</dt><dd>${mb(st.files)}</dd></div>
+        <div><dt>Усього в теці даних</dt><dd>${mb(s.data)}</dd></div>
+      </dl></div>
+      <div class="box"><h3>Доставка</h3><dl class="facts">
+        <div><dt>Підписок на сповіщення</dt><dd>${num(x.push.subs)}${x.push.failing ? ` · <span class="bad">з помилками ${num(x.push.failing)}</span>` : ''}</dd></div>
+        <div><dt>Нагадувань за 14 днів</dt><dd>${num(sum(x.reminders.ok))}${sum(x.reminders.fail) ? ` · <span class="bad">не доставлено ${num(sum(x.reminders.fail))}</span>` : ''}</dd></div>
+        <div><dt>Помилок Claude за 14 днів</dt><dd>${sum(x.aiErrors) ? `<span class="bad">${num(sum(x.aiErrors))}</span>` : '0'}</dd></div>
+        <div><dt>Навантаження</dt><dd>${s.load.map(v => v.toFixed(2)).join(' · ')} <span class="muted">(${s.cpus} ядра)</span></dd></div>
+        <div><dt>Node.js</dt><dd>${esc(s.node)}</dd></div>
+        <div><dt>Сервер без перезавантаження</dt><dd>${dur(s.hostUptime)}</dd></div>
+      </dl></div>
+    </section>
+    <section class="box"><h3>Нагадування за 14 днів</h3>${bars(x.reminders.ok)}</section>
+    <section class="box">
+      <h3>Оновлення</h3>
+      ${x.updates ? `<p class="small">${x.updates.last ? esc(x.updates.last) : 'Записів про оновлення ще немає.'}</p><pre class="logbox">${esc(x.updates.lines.join('\n'))}</pre>`
+        : '<p class="muted small">Журнал автооновлень недоступний (на сервері — /var/log/mdmy-update.log).</p>'}
+    </section>
+  </div>`;
+  $('[data-a="refresh"]', main).onclick = () => route();
 }
