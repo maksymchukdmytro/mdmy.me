@@ -72,17 +72,17 @@ function shell() {
   app.innerHTML = `<div class="app${pref.get('sideHidden', false) ? ' side-hidden' : ''}" id="shell">
     <aside class="side" id="side" aria-label="Навігація">
       <div class="side-top">
-        <a class="ws" href="#/today" aria-label="MDMY — Сьогодні"><span class="ws-logo">${wordmark}</span></a>
+        <a class="ws" href="#/today" aria-label="MDMY — Головна"><span class="ws-logo">${wordmark}</span></a>
         <button class="icon-btn" data-act="side-toggle" title="Сховати панель">${icon('sidebar')}</button>
       </div>
       <button class="side-item" data-act="search">${icon('search')}<span>Пошук</span><kbd>Ctrl K</kbd></button>
       <a class="side-item desk-only" href="#/record" data-r="record">${icon('mic')}<span>Запис голосом</span></a>
       <div class="side-gap"></div>
-      <a class="side-item" href="#/today" data-r="today">${icon('sun')}<span>Сьогодні</span><b class="n" data-n="today"></b></a>
-      <a class="side-item" href="#/upcoming" data-r="upcoming">${icon('upcoming')}<span>Найближчі 7 днів</span></a>
-      <a class="side-item" href="#/s/inbox" data-r="s/inbox">${icon('inbox')}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
+      <a class="side-item" href="#/today" data-r="today">${icon('home')}<span>Головна</span><b class="n" data-n="today"></b></a>
+      <a class="side-item" href="#/all" data-r="all">${icon('layers')}<span>Задачі</span><b class="n" data-n="all"></b></a>
       <a class="side-item" href="#/rituals" data-r="rituals">${icon('ritual')}<span>Щоденні завдання</span></a>
-      <a class="side-item" href="#/all" data-r="all">${icon('layers')}<span>Усі задачі</span><b class="n" data-n="all"></b></a>
+      <a class="side-item" href="#/s/inbox" data-r="s/inbox">${icon('inbox')}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
+      <a class="side-item" href="#/upcoming" data-r="upcoming">${icon('upcoming')}<span>Найближчі 7 днів</span></a>
       <div class="side-label"><span>Простори</span><button class="icon-btn xs" data-act="new-space" title="Новий простір">${icon('plus', 14)}</button></div>
       <div id="sideSpaces"></div>
       <div class="side-label"><span>Інше</span></div>
@@ -92,9 +92,6 @@ function shell() {
       <a class="side-item" href="#/settings" data-r="settings">${icon('settings')}<span>Налаштування</span></a>
       ${account && account.admin ? `<a class="side-item" href="/admin/">${icon('activity')}<span>Адмінка</span></a>` : ''}
       <div class="side-stats" data-act="stats"></div>
-      <div class="side-foot">
-        <a class="side-item" href="/" title="Головна mdmy.me">${icon('home')}<span>mdmy.me</span></a>
-      </div>
     </aside>
     <div class="side-scrim" data-act="side-close"></div>
     <div class="main">
@@ -105,12 +102,12 @@ function shell() {
       </header>
       <div class="view" id="view"></div>
     </div>
-    <nav class="tabbar" aria-label="Швидкі переходи">
-      <a href="#/today" data-r="today">${icon('sun', 20)}<span>Сьогодні</span></a>
-      <a href="#/s/inbox" data-r="s/inbox">${icon('inbox', 20)}<span>Вхідні</span><b class="n badge" data-n="inbox"></b></a>
+    <nav class="tabbar" aria-label="Головна навігація">
+      <a href="#/today" data-r="today"><i class="tab-ic">${icon('home', 21)}</i><span>Головна</span></a>
+      <a href="#/all" data-r="all"><i class="tab-ic">${icon('layers', 21)}</i><span>Задачі</span></a>
       <button type="button" data-r="record" class="tab-mic" aria-label="Нова задача голосом: натисніть — говорити, утримуйте — надіслати одразу">${icon('mic', 22)}</button>
-      <a href="#/all" data-r="all">${icon('layers', 20)}<span>Усі задачі</span></a>
-      <button type="button" data-act="side-open">${icon('menu', 20)}<span>Меню</span></button>
+      <a href="#/rituals" data-r="rituals" data-daily><i class="tab-ic">${icon('ritual', 21)}</i><span>Щоденні</span></a>
+      <button type="button" data-act="side-open" data-r="menu"><i class="tab-ic">${icon('menu', 21)}<b class="dot" data-dot></b></i><span>Меню</span></button>
     </nav>
   </div>`;
   renderSideSpaces(); renderStats();
@@ -144,10 +141,15 @@ function renderCounts() {
     const v = k === 'today' ? c.today : k === 'inbox' ? c.inbox : k === 'all' ? c.all : k === 'team' ? meta.teamN : k.startsWith('s:') ? (c.spaces || {})[k.slice(2)] : 0;
     el.textContent = v ? (v > 999 ? '999+' : v) : '';
   }
+  // крапка на «Меню»: є доручення, що чекають на вас
+  for (const d of $$('[data-dot]')) d.hidden = !meta.teamN;
 }
 function markActive() {
   const r = currentKey;
-  for (const a of $$('[data-r]')) a.classList.toggle('on', a.dataset.r === r || (a.dataset.r === 'rituals' && r === 'habits'));
+  for (const a of $$('[data-r]')) a.classList.toggle('on', a.dataset.r === r || (a.dataset.r === 'rituals' && r === 'habits') ||
+    (a.dataset.r === 'menu' && !['today', 'all', 'rituals', 'habits', 'record', 'r'].includes(r)));        // розділи з меню — підсвічуємо «Меню»
+  // «Щоденні» на нижній панелі відкривають ту вкладку, де були востаннє (завдання чи звички)
+  for (const a of $$('[data-daily]')) a.setAttribute('href', '#/' + pref.get('daily-tab', 'rituals'));
 }
 onMeta(() => { renderSideSpaces(); renderStats(); });
 
@@ -169,18 +171,18 @@ async function onShellClick(e) {
 }
 
 // ---------- меню телефона: легкий нижній аркуш ----------
-// Сьогодні, Вхідні й Усі задачі — на нижній панелі, тут лише решта: пошук, простори, ритуали, інші розділи.
+// Головна, Задачі й Щоденні — на нижній панелі, тут решта: пошук, Вхідні, Найближчі, простори, інші розділи.
 function phoneMenu() {
   const c = meta.counts || {}, cur = currentKey, teamN = meta.teamN || 0;
   const item = (href, ic, label, n, key) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
   const s = sheet(`<div class="m-sheet">
       <button type="button" class="m-search" data-m="search">${icon('search', 18)}Пошук задач і нотаток</button>
+      ${item('#/s/inbox', 'inbox', 'Вхідні', c.inbox, 's/inbox')}
+      ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
       <p class="m-label">Простори</p>
       ${openSpaces().filter(x => x.key !== 'inbox').map(x => item('#/s/' + x.key, x.icon, x.name, (c.spaces || {})[x.key], 's/' + x.key)).join('')}
       <a class="m-item add" href="#/settings/spaces">${icon('plus', 20)}<span>Новий простір</span></a>
       <p class="m-label">Ще</p>
-      ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
-      ${item('#/' + pref.get('daily-tab', 'rituals'), 'ritual', 'Щоденні завдання', 0, cur === 'habits' ? 'habits' : 'rituals')}
       ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
       ${item('#/team', 'users', 'Доручення', teamN, 'team')}
       ${item('#/challenges', 'trophy', 'Челенджі', 0, 'challenges')}
@@ -196,9 +198,9 @@ function phoneMenu() {
 
 // ---------- маршрути (nav.js) ----------
 function pageFor(key, parts) {
-  if (key === 'today') return tasksPage({ key, title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
+  if (key === 'today') return tasksPage({ key, title: 'Головна', icon: 'home', area: 'all', view: 'today', group: 'tod', name: account.name });
   if (key === 'upcoming') return tasksPage({ key, title: 'Найближчі 7 днів', icon: 'upcoming', area: 'all', view: 'week', group: 'date' });
-  if (key === 'all') return tasksPage({ key, title: 'Усі задачі', icon: 'layers', area: 'all', view: 'open', group: 'space' });
+  if (key === 'all') return tasksPage({ key, title: 'Задачі', icon: 'layers', area: 'all', view: 'open', group: 'space' });
   if (key.startsWith('s/')) {
     const sp = space(parts[1] || 'inbox');
     return tasksPage({ key, title: sp.name, icon: sp.icon, area: sp.key, view: 'open', group: 'date' });
@@ -210,9 +212,9 @@ function pageFor(key, parts) {
   if (key === 'challenges') return challengesPage(parts[1]);
   if (key === 'record') return recordPage();
   if (key === 'settings') return settingsPage(parts[1]);
-  return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
+  return tasksPage({ key: 'today', title: 'Головна', icon: 'home', area: 'all', view: 'today', group: 'tod', name: account.name });
 }
-const CRUMB = { today: ['sun', 'Сьогодні'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Усі задачі'], notes: ['note', 'Нотатки'],
+const CRUMB = { today: ['home', 'Головна'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Задачі'], notes: ['note', 'Нотатки'],
                 rituals: ['ritual', 'Щоденні завдання'], habits: ['ritual', 'Звички'], team: ['users', 'Доручення'], challenges: ['trophy', 'Челенджі'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };
 let currentPage = '', lastPage = '';
 // показати сторінку без зміни адреси (під екраном ритуалу, якщо застосунок відкрили зі сповіщення)

@@ -1253,3 +1253,28 @@ body.dnd-on .fab{transform:scale(0);opacity:0}
 .vjob.ok .vj-t small{white-space:normal}
 /* поки є плашки — кнопка «+» не заважає */
 .vjobs-on .fab{opacity:0;pointer-events:none;transform:scale(.8)}
+
+/* ---------- нижня панель 2026: Головна · Задачі · мікрофон · Щоденні · Меню ----------
+   напівпрозора з розмиттям, активна вкладка — «пігулка» під значком, підписи завжди видно */
+@media (max-width:899px){
+  .tabbar{background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent);height:calc(62px + env(safe-area-inset-bottom))}
+  .tabbar>a,.tabbar>button{gap:3px;font-size:11px;font-weight:500;color:var(--text-2)}
+  .tabbar .tab-ic{position:relative;display:grid;place-items:center;width:52px;height:30px;border-radius:999px;font-style:normal;transition:background .25s var(--ease)}
+  .tabbar .on .tab-ic{background:var(--active)}
+  .tabbar .on{color:var(--text);font-weight:600}
+  .tabbar .tab-ic .dot{position:absolute;top:3px;right:12px;width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 2px var(--bg)}
+  .tabbar .tab-ic .dot[hidden]{display:none}
+  .tabbar .tab-mic .ic{width:48px;height:48px;padding:12px;box-shadow:0 6px 16px rgba(15,15,15,.22)}
+  .fab{bottom:calc(82px + env(safe-area-inset-bottom))}
+}
+/* Головна: картки «Вхідні» і «Доручення» — коротко, з однією дією */
+.home-card{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2)}
+.inbox-bar.home-card>span{margin-right:0}
+.home-card .hc-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)}
+.home-card .hc-main>.ic:first-child{flex:none;color:var(--text-2)}
+.home-card .hc-main>span{flex:1;min-width:0;display:flex;flex-direction:column}
+.home-card .hc-main b{font-weight:600}
+.home-card .hc-main small{color:var(--text-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home-card .hc-main>.ic:last-child{flex:none;color:var(--text-3)}
+.home-card[hidden]{display:none}
+.team-card{animation:rowIn .3s var(--ease)}

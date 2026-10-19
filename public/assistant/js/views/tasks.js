@@ -48,6 +48,7 @@ export function tasksPage(cfg) {
       </div>
       ${isToday ? '<div class="day-card" hidden></div><div class="rt-strip" hidden></div>' : ''}
       <div class="inbox-bar" hidden></div>
+      ${isToday ? '<div class="home-card team-card" hidden></div>' : ''}
       <div class="vbar">
         <div class="vtabs" role="tablist">
           <button type="button" data-mode="list" role="tab">${icon('list')}<span>Список</span></button>
@@ -165,22 +166,39 @@ export function tasksPage(cfg) {
   }
 
   // ---------- «Вхідні» ----------
+  // «Вхідні» — смужка розкладання: на сторінці «Вхідні» й на Головній (там — картка з кнопкою «Розкласти»)
   function drawInbox() {
     const bar = $('.inbox-bar', root), n = (meta.counts || {}).inbox || 0;
-    const show = cfg.area === 'inbox' && n > 0 && !st.showDone;
+    const here = cfg.area === 'inbox' || isToday;
+    const show = here && n > 0 && !st.showDone;
+    drawTeam();
     if (!show) {
       // усе розкладено — смужка плавно згортається, а не зникає ривком
-      if (!bar.hidden && cfg.area === 'inbox' && !st.showDone && !bar.classList.contains('bye')) {
+      if (!bar.hidden && here && !st.showDone && !bar.classList.contains('bye')) {
         bar.style.height = bar.offsetHeight + 'px'; bar.offsetHeight; bar.classList.add('bye');
         setTimeout(() => { bar.hidden = true; bar.classList.remove('bye'); bar.style.height = ''; }, 420);
       } else if (!bar.classList.contains('bye')) bar.hidden = true;
       return;
     }
     bar.hidden = false; bar.classList.remove('bye'); bar.style.height = '';
+    if (isToday) {
+      bar.classList.add('home-card');
+      bar.innerHTML = `<a class="hc-main" href="#/s/inbox">${icon('inbox', 18)}<span><b>Вхідні · ${n}</b><small>чекають розкладання по просторах</small></span></a>
+        <button type="button" class="btn primary sm" data-t="triage">Розкласти</button>`;
+      return;
+    }
     bar.innerHTML = `<span>Асистент не зміг розкласти <b>${n}</b> ${n === 1 ? 'задачу' : n < 5 ? 'задачі' : 'задач'}</span>
       <button type="button" class="btn primary sm" data-t="triage">Розкласти по одній</button>
       <button type="button" class="btn sm" data-t="suggest">${icon('sparkles', 14)}Підказати</button>
       ${st.sug.size ? `<button type="button" class="btn sm" data-t="accept">${icon('check', 14)}Прийняти підказки (${st.sug.size})</button>` : ''}`;
+  }
+
+  // Головна: доручення, що чекають на вас (зробити або перевірити)
+  function drawTeam() {
+    const box = $('.team-card', root); if (!box) return;
+    const n = meta.teamN || 0;
+    box.hidden = !n;
+    if (n) box.innerHTML = `<a class="hc-main" href="#/team">${icon('users', 18)}<span><b>Доручення · ${n}</b><small>чекають на вас — виконати або перевірити</small></span>${icon('chevronRight', 16)}</a>`;
   }
 
   // ---------- список ----------
