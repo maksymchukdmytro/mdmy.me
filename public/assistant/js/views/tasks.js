@@ -122,6 +122,8 @@ export function tasksPage(cfg) {
   function draw() {
     syncBar(); drawInbox(); drawDay();
     if (st.mode === 'board') drawBoard(); else drawList();
+    // список ↔ дошка: м'яка поява нового вигляду
+    if (st.swap) { st.swap = false; const b = $('.tcontent', root); b.classList.remove('swap'); void b.offsetWidth; b.classList.add('swap'); }
     drawBulk();
   }
   const refresh = () => load();
@@ -131,7 +133,8 @@ export function tasksPage(cfg) {
     const box = $('.day-card', root); if (!box || st.mode !== 'list') { if (box) box.hidden = true; return; }
     const now = Date.now(), hm = d => { const x = new Date(d); return `${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; };
     const open = st.items.length, doneT = (st.doneToday || []).length;
-    const rDone = st.rituals.reduce((s, r) => s + (r.active ? r.done : 0), 0), rTotal = st.rituals.reduce((s, r) => s + (r.active ? r.total : 0), 0);
+    // щоденне завдання — одна справа дня (а не кожен раз «води кожні 2 години»): зроблено, коли виконано всі рази
+    const act = st.rituals.filter(r => r.active && r.total), rTotal = act.length, rDone = act.filter(r => r.done >= r.total).length;
     const done = doneT + rDone, total = done + open + Math.max(0, rTotal - rDone);
     const late = st.items.filter(it => it.overdue).length;
     // що далі: найближча задача з часом (строк чи нагадування — що раніше) або раз ритуалу
@@ -226,7 +229,7 @@ export function tasksPage(cfg) {
   }
   function props(it, child) {
     const out = [];
-    if (!child && !it.done && it.area === 'inbox') {
+    if (!child && !it.done && it.area === 'inbox' && cfg.area === 'inbox') {          // швидке розкладання — лише на сторінці «Вхідні»
       const sug = st.sug.get(it.id);
       out.push(`<span class="quick">${sug ? `<button type="button" class="qchip sug" data-a="area" data-v="${sug}" title="Підказка асистента">${icon('sparkles', 12)}${esc(space(sug).name)}</button>` : ''}${
         openSpaces().filter(s => s.key !== 'inbox' && s.key !== sug).slice(0, 3).map(s => `<button type="button" class="qchip" data-a="area" data-v="${s.key}" title="Перенести в «${esc(s.name)}»">${icon(s.icon, 12)}<span>${esc(s.name)}</span></button>`).join('')}${
@@ -643,7 +646,7 @@ export function tasksPage(cfg) {
   async function onClick(e) {
     const t = e.target.closest('[data-t]'), a = e.target.closest('[data-a]'), m = e.target.closest('button[data-mode]');
     const clr = e.target.closest('[data-clear]'), grp = e.target.closest('[data-grp]'), bb = e.target.closest('[data-b]');
-    if (m) { st.mode = m.dataset.mode; pref.set(K('mode'), st.mode); st.sel.clear(); load(); return; }
+    if (m) { st.mode = m.dataset.mode; pref.set(K('mode'), st.mode); st.sel.clear(); st.swap = true; load(); return; }
     if (clr) { const k = clr.dataset.clear; if (k === 'view') st.view = cfg.view; if (k === 'prio') st.prio = 0; if (k === 'tag') st.tag = ''; if (k === 'done') st.showDone = false; load(); return; }
     if (grp) { const k = grp.dataset.grp; st.collapsed.has(k) ? st.collapsed.delete(k) : st.collapsed.add(k); pref.set(K('collapsed'), [...st.collapsed]); drawList(); return; }
     if (e.target.classList.contains('more')) return load(true);
@@ -668,7 +671,7 @@ export function tasksPage(cfg) {
         if (id) st.flash = id;
         return;
       }
-      if (k === 'layout') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); st.sel.clear(); load(); }
+      if (k === 'layout') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); st.sel.clear(); st.swap = true; load(); }
       if (k === 'triage') triage();
       if (k === 'suggest') suggest(t);
       if (k === 'accept') acceptAll();
@@ -768,7 +771,7 @@ export function tasksPage(cfg) {
   function onKey(e) {
     if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-wrap, .pal-wrap, .panel-wrap')) return;
     if (e.key === 'n' || e.key === 'т' || e.key === 'c' || e.key === 'с') { e.preventDefault(); newTask(); }
-    if (e.key === 'b' || e.key === 'и') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); load(); }
+    if (e.key === 'b' || e.key === 'и') { st.mode = st.mode === 'board' ? 'list' : 'board'; pref.set(K('mode'), st.mode); st.swap = true; load(); }
     if (e.key === 'Escape' && st.selecting) { st.selecting = false; st.sel.clear(); draw(); }
   }
 
