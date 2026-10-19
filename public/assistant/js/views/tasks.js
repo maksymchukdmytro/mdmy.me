@@ -20,7 +20,7 @@ export function tasksPage(cfg) {
   const K = k => `tasks:${cfg.key}:${k}`;
   const st = {
     mode: pref.get(K('mode'), 'list'), sort: pref.get(K('sort'), 'smart'), group: pref.get(K('group'), cfg.group || 'date'),
-    view: cfg.view, q: '', tag: '', prio: 0, showDone: false,
+    view: cfg.view, q: '', tag: '', prio: 0, showDone: false, space: '',
     items: [], total: 0, columns: null, counts: null, sel: new Set(), selecting: false, sug: new Map(), loading: 0,
     collapsed: new Set(pref.get(K('collapsed'), cfg.key === 'today' ? ['donetoday'] : [])), rituals: []
   };
@@ -33,7 +33,10 @@ export function tasksPage(cfg) {
     const g = h < 5 ? 'Доброї ночі' : h < 12 ? 'Доброго ранку' : h < 18 ? 'Добрий день' : 'Добрий вечір';
     return { date: `${WDN[d.getDay()]}, ${d.getDate()} ${MONG[d.getMonth()]}`, text: name ? `${g}, ${name}` : g };
   }
-  const cross = cfg.area === 'all';
+  // «Усі задачі» й «Найближчі»: рядок просторів — один дотик лишає задачі лише цього простору (запамʼятовується)
+  const spacePick = cfg.area === 'all' && !isToday;
+  if (spacePick) { st.space = pref.get(K('space'), ''); if (st.space && !openSpaces().some(x => x.key === st.space)) st.space = ''; }
+  let cross = cfg.area === 'all' && !st.space;
   let root, top;
 
   // ---------- каркас ----------
@@ -58,6 +61,7 @@ export function tasksPage(cfg) {
           <button type="button" class="tbtn desk-only" data-t="select" title="Вибрати кілька (на телефоні — утримати задачу)">${icon('check', 15)}<span>Вибрати</span></button>
         </div>
       </div>
+      ${spacePick ? '<div class="spchips" role="tablist" aria-label="Простір"></div>' : ''}
       <div class="fchips"></div>
       <div class="tcontent"></div>
       <button type="button" class="btn more" hidden></button>
@@ -67,7 +71,7 @@ export function tasksPage(cfg) {
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onKeyIn);
     longPress(); swipe();
-    offMeta = onMeta(() => { drawDay(); drawInbox(); });
+    offMeta = onMeta(() => { drawDay(); drawInbox(); drawSpaces(); });
     const s = $('.vsearch input', root);
     s.addEventListener('input', debounce(() => { st.q = s.value.trim(); load(); }, 220));
     document.addEventListener('keydown', onKey);
@@ -88,11 +92,18 @@ export function tasksPage(cfg) {
     $('[data-t="filter"]', root).classList.toggle('on', chips.length > 0);
     $('[data-t="select"]', root).classList.toggle('on', st.selecting);
     $('[data-t="layout"]', root).innerHTML = icon(st.mode === 'board' ? 'list' : 'board', 18);
+    drawSpaces();
+  }
+  function drawSpaces() {
+    const box = $('.spchips', root); if (!box) return;
+    const n = k => cfg.view === 'open' ? (k ? meta.counts.spaces[k] || 0 : meta.counts.all) : null;
+    const chip = (k, label, ic) => `<button type="button" class="spchip" data-space="${k}" role="tab" aria-selected="${st.space === k}">${ic ? icon(ic, 14) : ''}<span>${esc(label)}</span>${n(k) != null ? `<b>${n(k)}</b>` : ''}</button>`;
+    box.innerHTML = chip('', 'Усі') + openSpaces().map(sp => chip(sp.key, sp.name, sp.icon)).join('');
   }
 
   // ---------- завантаження ----------
   function params(extra) {
-    const p = new URLSearchParams({ area: cfg.area, view: st.showDone ? 'done' : st.view, sort: st.group === 'status' && st.sort === 'smart' ? 'smart' : st.sort, ...extra });
+    const p = new URLSearchParams({ area: st.space || cfg.area, view: st.showDone ? 'done' : st.view, sort: st.group === 'status' && st.sort === 'smart' ? 'smart' : st.sort, ...extra });
     if (st.q) p.set('q', st.q); if (st.tag) p.set('tag', st.tag); if (st.prio) p.set('prio', st.prio);
     return p;
   }
@@ -176,8 +187,8 @@ export function tasksPage(cfg) {
   function groupOf(it) {
     if (st.showDone) return ['done', 'Виконані'];
     if (st.group === 'status') return [it.status, status(it.status).name];
-    if (st.group === 'space') return [it.area, space(it.area).name];
-    if (st.group === 'date') { const b = dueBucket(it); return [b, BUCKETS[b]]; }
+    if (st.group === 'space' && !st.space) return [it.area, space(it.area).name];
+    if (st.group === 'date' || st.group === 'space') {       // вибрано один простір — групуємо за строком const b = dueBucket(it); return [b, BUCKETS[b]]; }
     if (st.group === 'tod') {
       if (it.overdue) return ['late', TOD.late];
       if (!it.due_at) return ['nodate', TOD.nodate];
@@ -205,7 +216,8 @@ export function tasksPage(cfg) {
       const groups = new Map();
       for (const it of st.items) { const [k, l] = groupOf(it); if (!groups.has(k)) groups.set(k, { l, list: [] }); groups.get(k).list.push(it); }
       let keys = [...groups.keys()];
-      const ord = typeof ORDER[st.group] === 'function' ? ORDER[st.group]() : ORDER[st.group];
+      const gk = st.group === 'space' && st.space ? 'date' : st.group;
+      const ord = typeof ORDER[gk] === 'function' ? ORDER[gk]() : ORDER[gk];
       if (ord && !st.showDone && st.sort === 'smart') keys.sort((a, b) => ord.indexOf(a) - ord.indexOf(b));
       let n = 0;
       box.classList.toggle('stagger', !st.drawn); st.drawn = true;
@@ -412,7 +424,7 @@ export function tasksPage(cfg) {
     else { const i = $('.qadd-in', root); if (i) { i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
   }
   async function quickAdd(text, extra = {}) {
-    const area = cfg.area === 'all' ? 'inbox' : cfg.area;
+    const area = st.space || (cfg.area === 'all' ? 'inbox' : cfg.area);
     const due = cfg.view === 'today' ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d; })() : null;
     const body = { text, area, ...extra };
     if (due && !extra.status) { const p = n => String(n).padStart(2, '0'); body.due = `${due.getFullYear()}-${p(due.getMonth() + 1)}-${p(due.getDate())}T${p(due.getHours())}:00`; }
@@ -422,7 +434,7 @@ export function tasksPage(cfg) {
   }
   async function aiAdd(input) {
     const text = input.value.trim(); if (!text) return input.focus();
-    const hint = cfg.area !== 'all' && cfg.area !== 'inbox' ? ` (простір: ${space(cfg.area).name})` : '';
+    const ar = st.space || cfg.area, hint = ar !== 'all' && ar !== 'inbox' ? ` (простір: ${space(ar).name})` : '';
     input.disabled = true;
     try {
       const r = await post('assistant/message', { text: text + hint });
@@ -646,6 +658,12 @@ export function tasksPage(cfg) {
   async function onClick(e) {
     const t = e.target.closest('[data-t]'), a = e.target.closest('[data-a]'), m = e.target.closest('button[data-mode]');
     const clr = e.target.closest('[data-clear]'), grp = e.target.closest('[data-grp]'), bb = e.target.closest('[data-b]');
+    const sc = e.target.closest('[data-space]');
+    if (sc) {
+      if (sc.dataset.space === st.space) return;
+      st.space = sc.dataset.space; cross = !st.space; pref.set(K('space'), st.space); st.sel.clear(); st.swap = true;
+      drawSpaces(); sc.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); load(); return;
+    }
     if (m) { st.mode = m.dataset.mode; pref.set(K('mode'), st.mode); st.sel.clear(); st.swap = true; load(); return; }
     if (clr) { const k = clr.dataset.clear; if (k === 'view') st.view = cfg.view; if (k === 'prio') st.prio = 0; if (k === 'tag') st.tag = ''; if (k === 'done') st.showDone = false; load(); return; }
     if (grp) { const k = grp.dataset.grp; st.collapsed.has(k) ? st.collapsed.delete(k) : st.collapsed.add(k); pref.set(K('collapsed'), [...st.collapsed]); drawList(); return; }
@@ -667,7 +685,7 @@ export function tasksPage(cfg) {
       if (k === 'select') { st.selecting = !st.selecting; if (!st.selecting) st.sel.clear(); draw(); }
       if (k === 'compose') {
         const due = isToday ? (() => { const d = new Date(); d.setHours(Math.min(23, Math.max(18, d.getHours() + 1)), 0, 0, 0); return d.getTime(); })() : null;
-        const id = await compose({ area: cfg.area, due });
+        const id = await compose({ area: st.space || cfg.area, due });
         if (id) st.flash = id;
         return;
       }
@@ -765,7 +783,7 @@ export function tasksPage(cfg) {
       const text = e.target.value.trim(); if (!text) return;
       if (e.ctrlKey || e.metaKey) return aiAdd(e.target);
       e.target.value = '';
-      try { await quickAdd(text); toast(cfg.area === 'all' ? 'Додано у «Вхідні»' : 'Додано'); } catch (err) { fail(err); e.target.value = text; }
+      try { await quickAdd(text); toast(cfg.area === 'all' && !st.space ? 'Додано у «Вхідні»' : 'Додано'); } catch (err) { fail(err); e.target.value = text; }
     }
   }
   function onKey(e) {
