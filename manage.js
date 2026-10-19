@@ -26,7 +26,7 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
     db.prepare('INSERT INTO accounts (login, name, salt, hash, created) VALUES (?, ?, ?, ?, ?)')
       .run(l, name || 'Власник', salt, DB.hashPass(pass, salt), Date.now());
     audit('account:create', l);
-    DB.ensureAdmin(db);
+    DB.ensureAdmin(db); DB.ensurePubIds(db);
     console.log(`Створено обліковий запис: ${l}\nПароль: ${pass}`);
   } else if (cmd === 'password') {
     const a = db.prepare('SELECT * FROM accounts WHERE login = ?').get(String(login || ''));

@@ -245,7 +245,7 @@ export function tasksPage(cfg) {
       <button type="button" class="chk${it.done ? ' on' : ''}" data-a="done" aria-label="${it.done ? 'Повернути' : 'Виконано'}">${icon('check', 12)}</button>
       <a class="row-main" href="${taskHref(it.id)}" data-a="open">
         <span class="row-title">${esc(it.text)}</span>
-        ${!child && kids.length ? `<span class="row-meta">${icon('subtasks', 13)}${kd}/${kids.length}</span>` : ''}
+        ${!child && kids.length ? `<span class="row-meta">${icon('subtasks', 13)}${kd}/${kids.length}</span>` : ''}${it.att ? `<span class="row-meta">${icon('paperclip', 13)}${it.att}</span>` : ''}
         ${it.description ? `<span class="row-meta" title="Є опис">${icon('text', 13)}</span>` : ''}
       </a>
       <div class="row-props">${props(it, child)}</div>
@@ -259,6 +259,7 @@ export function tasksPage(cfg) {
     if (it.due_at) bits.push(`<span class="prop${it.overdue && !it.done && !(it.kind === 'reminder' && it.sent) ? ' late' : ''}">${icon(it.kind === 'reminder' ? 'bell' : 'calendar', 12)}${esc(fmtDue(it.due_at))}</span>`);
     if (it.priority) bits.push(`<span class="prop prio p${it.priority}">${icon('flag', 12)}${it.priority === 2 ? 'Термінова' : 'Важлива'}</span>`);
     if (kids.length) bits.push(`<span class="prop">${icon('subtasks', 12)}${kd}/${kids.length}</span>`);
+    if (it.att) bits.push(`<span class="prop">${icon('paperclip', 12)}${it.att}</span>`);
     if (it.tags && it.tags.length) bits.push(`<span class="prop tags">${it.tags.slice(0, 3).map(t => '#' + esc(t)).join(' ')}</span>`);
     if (cross) bits.push(`<span class="prop sp">${icon(space(it.area).icon, 12)}${esc(space(it.area).name)}</span>`);
     return `<div class="card${it.done ? ' done' : ''}${st.sel.has(it.id) ? ' sel' : ''}" data-id="${it.id}" tabindex="0">
@@ -307,17 +308,37 @@ export function tasksPage(cfg) {
         document.body.append(ghost);
         const ph = document.createElement('div'); ph.className = 'card-ph'; ph.style.height = r.height + 'px';
         card.after(ph); card.classList.add('dragging');
-        drag = { card, ghost, ph, dx: sx - r.left, dy: sy - r.top, from: card.closest('.col').dataset.status };
+        drag = { card, ghost, ph, dx: sx - r.left, dy: sy - r.top, from: card.closest('.col').dataset.status, dock: openDock(card.closest('.col').dataset.status), target: null };
         if (navigator.vibrate && touch) navigator.vibrate(15);
         follow(ev);
       }
     });
+    // Під час перетягування знизу виїжджає панель: усі колонки (кинути — перенести в кінець колонки) і смітник.
+    // На телефоні так не треба тягнути картку через усю дошку.
+    function openDock(from) {
+      const dock = document.createElement('div'); dock.className = 'dnd-dock';
+      dock.innerHTML = `<div class="dock-cols">${st.columns.map(c => `<div class="dock-t${c.status === from ? ' cur' : ''}" data-status="${c.status}">${icon(STATUS_ICON[c.status] || 'circle', 16)}<span>${esc(c.name)}</span></div>`).join('')}</div>
+        <div class="dock-trash" data-trash>${icon('trash', 20)}<span>Видалити</span></div>`;
+      document.body.append(dock); document.body.classList.add('dnd-on');
+      requestAnimationFrame(() => dock.classList.add('in'));
+      return dock;
+    }
+    function closeDock(d) { const k = d.dock; k.classList.remove('in'); document.body.classList.remove('dnd-on'); setTimeout(() => k.remove(), 220); }
     function follow(ev) {
       const d = drag; if (!d) return;
       d.ghost.style.transform = `translate(${ev.clientX - d.dx}px, ${ev.clientY - d.dy}px) rotate(1.5deg)`;
       d.ghost.style.display = 'none';
       const under = document.elementFromPoint(ev.clientX, ev.clientY);
       d.ghost.style.display = '';
+      // ціль у панелі знизу
+      const t = under && under.closest('.dock-t, [data-trash]');
+      if (t !== d.target) {
+        if (d.target) d.target.classList.remove('hot');
+        d.target = t; if (t) { t.classList.add('hot'); if (navigator.vibrate) navigator.vibrate(8); }
+        d.ghost.classList.toggle('to-trash', !!(t && t.hasAttribute('data-trash')));
+        d.ghost.classList.toggle('over', !!t);                // над панеллю картка зменшується — видно, куди кидаєш
+      }
+      if (t) return;
       const col = under && under.closest('.col');
       if (col) {
         const body = col.querySelector('.col-body');
@@ -332,6 +353,23 @@ export function tasksPage(cfg) {
     }
     async function finish() {
       const d = drag; drag = null; if (!d) return;
+      closeDock(d);
+      const t = d.target;
+      if (t && t.hasAttribute('data-trash')) {
+        // у смітник: картка зникає одразу, видалення — коли сховається підказка «Скасувати» (7 с)
+        d.ph.replaceWith(d.card); d.card.classList.remove('dragging'); d.ghost.classList.add('drop'); setTimeout(() => d.ghost.remove(), 250);
+        const id = +d.card.dataset.id; d.card.hidden = true;
+        let undone = false;
+        toast('Задачу видалено', () => { undone = true; d.card.hidden = false; }, 7000);
+        await wait(7100);
+        if (undone) return;
+        try { await api('assistant/items/' + id, { method: 'DELETE' }); changed(); } catch (e) { fail(e); d.card.hidden = false; }
+        return;
+      }
+      if (t) {                                            // кинули на колонку в панелі — у кінець цієї колонки
+        const body = t.closest('.dnd-dock') && document.querySelector(`.board .col[data-status="${t.dataset.status}"] .col-body`);
+        if (body) body.insertBefore(d.ph, body.querySelector('.col-add, .col-note') || null);
+      }
       const col = d.ph.closest('.col'), statusKey = col.dataset.status;
       const prev = d.ph.previousElementSibling && d.ph.previousElementSibling.closest('.card:not(.dragging)');
       const next = d.ph.nextElementSibling && d.ph.nextElementSibling.closest('.card:not(.dragging)');

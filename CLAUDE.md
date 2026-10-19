@@ -21,7 +21,7 @@
   Старі адреси `/speachtotext` → 301 на `/assistant/`.
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
-- `lib/db.js` — схема (PRAGMA user_version, зараз 9): `accounts` (role, ws, google_sub, email), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
+- `lib/db.js` — схема (PRAGMA user_version, зараз 10): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
   і таблиці асистента `assistant_*`. Нові зміни схеми — новою міграцією з наступним `user_version`.
 - `public/nakladna/` + `lib/nakladna.js` — видаткові накладні: LP-CRM getOrdersByID; короткий номер (напр. 353) шукається через getStatuses + getOrdersIdByStatus
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
@@ -83,6 +83,16 @@
   зупиняє її таймери, видаляє теку `ws/<ws>` і обліковий запис. Ліміт асистента для користувачів — `userLimit` на день (гість — 40), `allowAI` у server.js.
   Медіа окремих баз `/m/u5/<файл>` — лише за сесією власника або підписаним посиланням `?e=…&s=…` (HMAC, meta `media_secret`, 7 днів) для Telegram і push.
   Резервні копії: `manage.js backup <файл>` зберігає й окремі бази в теку `<файл без .db>-ws/` (14 останніх). Сторінка `public/privacy.html` (контакт — з `auth/config`).
+- Вкладення (міграція v10, таблиця `attachments` у базі власника записів, файли `<тека бази>/files/<32 hex>.<ext>`; `lib/files.js` — збереження сирого body,
+  типи, до 25 МБ, віддача з nosniff і CSP sandbox): `POST /api/assistant/items/:id/attachments` (файл або `{url}`), `DELETE /api/assistant/attachments/:id`,
+  `GET /api/assistant/files/<ключ>` — лише за сесією власника бази. У задачі — `attachments`, у списку — `att` (лічильник). Фронтенд — `views/attach.js` (фото зменшуються до 2048 px).
+- Доручення й челенджі — спільне між акаунтами, лише в основній базі (v10): `team_links` (виконавець дозволив керівнику за `pub_id`), `assignments`
+  (open → submitted → approved | rework | failed; `need_proof` — без доказу не здати), `challenges` (код, днів, старт, `confirm`, `need_proof`), `challenge_members`,
+  `challenge_checks` (draft / pending / ok / rejected), `shared_files` (докази, файли в `DATA_DIR/shared`, `GET /api/shared/<ключ>` — лише учасникам).
+  `lib/team.js` — API `/api/team/*`, `/api/challenges/*`, `/api/shared/*`; сповіщення — `notify` у server.js (Telegram і push того акаунта).
+  Фронтенд: `views/team.js` (#/team, деталі — аркуш #/team/a/<id>), `views/challenges.js` (#/challenges, #/challenges/<id>), налаштування → «Команда» (свій ID, «Отримувати задачі від»).
+  Лічильник «Доручень» (зробити + перевірити) — `meta.teamN` (store.js). Видалення акаунта прибирає його спільне (`team.forgetAccount`).
+- Дошка: під час перетягування знизу — панель колонок і смітник (`openDock` у tasks.js); кинути на колонку — у її кінець, у смітник — видалення з «Скасувати».
 - Оформлення повідомлень (константа `FORMAT` у lib/assistant.js — для reply агента, ранкового плану й підсумку; шаблони в lib/telegram.js — так само):
   суть першим реченням, перелік — кожен пункт з нового рядка через «• », групи — абзацами з назвою («Сьогодні:», «Задачі:»), час на початку пункту,
   без Markdown, емодзі — одне-два на повідомлення й лише де доречно. Рядки виконаних дій — «• Задача: …», «• Нагадування … — …».

@@ -84,6 +84,20 @@ function mediaAllowed(req, url, ws) {
   return !!(a && a.ws === ws);
 }
 
+// ---------- спільне між акаунтами: доручення, челенджі, файли-докази (lib/team.js) ----------
+const T = require('./lib/assistant-time');
+const accWs = id => db.prepare('SELECT ws, disabled FROM accounts WHERE id = ?').get(id);
+const todayOf = a => T.dayKey(Date.now(), wsOf(a).assistant.settings().tz);
+// сповістити акаунт: Telegram (якщо привʼязаний) і push на його пристрої
+function notify(accountId, title, text, url) {
+  const r = accWs(accountId); if (!r || r.disabled) return;
+  let w; try { w = workspace(r.ws); } catch (e) { return; }
+  const pub = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+  if (w.assistant.bot.ready()) w.assistant.bot.sendText(`${title}\n\n${text}`, /^https:/.test(pub) && url ? { reply_markup: { inline_keyboard: [[{ text: 'Відкрити', url: pub + url }]] } } : {}).catch(() => {});
+  w.push.sendText(title, text, url).catch(() => {});
+}
+const team = require('./lib/team')(db, { dataDir: DATA, notify, todayOf });
+
 // ---------- «Почати спочатку» і видалення акаунта ----------
 const wipe = require('./lib/wipe');
 async function account(req, res, url, a) {
@@ -104,6 +118,7 @@ async function account(req, res, url, a) {
     if (!a.ws) return send(res, 400, { error: 'Основний акаунт власника не видаляється.' });
     if (a.role === 'demo') return send(res, 400, { error: 'Гостьовий акаунт не видаляється — можна почати спочатку.' });
     if (b.confirm !== 'ВИДАЛИТИ') return send(res, 400, { error: 'Підтвердіть словом ВИДАЛИТИ.' });
+    team.forgetAccount(a.id);
     closeWorkspace(a.ws);
     try { fs.rmSync(DB.wsDir(DATA, a.ws), { recursive: true, force: true }); } catch (e) { console.error('[account] видалення файлів:', e.message); }
     db.prepare('DELETE FROM sessions WHERE account_id = ?').run(a.id);
@@ -176,6 +191,9 @@ async function api(req, res, url) {
   if (no) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: no });
   if (url.startsWith('/api/account/')) return account(req, res, url, a);
   if (url.startsWith('/api/admin/')) return auth.google.admin(req, res, url, a);
+  if (url === '/api/team' || url.startsWith('/api/team/')) return team.handleTeam(req, res, url, a);
+  if (url === '/api/challenges' || url.startsWith('/api/challenges/')) return team.handleChallenges(req, res, url, a);
+  if (url.startsWith('/api/shared/')) return team.handleShared(req, res, url, a);
   const w = wsOf(a);
   if (url.startsWith('/api/nakladna/')) return nakladna.handle(req, res, url, a);
   if (url.startsWith('/api/stt/')) return stt.handle(req, res, url);

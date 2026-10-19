@@ -10,6 +10,8 @@ import { openTask, closeTask, panelOpenId } from './views/panel.js';
 import { notesPage } from './views/notes.js';
 import { ritualsPage } from './views/rituals.js';
 import { habitsPage } from './views/habits.js';
+import { teamPage } from './views/team.js';
+import { challengesPage } from './views/challenges.js';
 import { openRitual, closeRitual, ritualOpenId } from './views/ritual-play.js';
 import { recordPage } from './views/record.js';
 import { settingsPage } from './views/settings.js';
@@ -85,6 +87,8 @@ function shell() {
       <div id="sideSpaces"></div>
       <div class="side-label"><span>Інше</span></div>
       <a class="side-item" href="#/notes" data-r="notes">${icon('note')}<span>Нотатки</span></a>
+      <a class="side-item" href="#/team" data-r="team">${icon('users')}<span>Доручення</span><b class="n badge" data-n="team"></b></a>
+      <a class="side-item" href="#/challenges" data-r="challenges">${icon('trophy')}<span>Челенджі</span></a>
       <a class="side-item" href="#/settings" data-r="settings">${icon('settings')}<span>Налаштування</span></a>
       <div class="side-stats" data-act="stats"></div>
       <div class="side-foot">
@@ -136,7 +140,7 @@ function renderCounts() {
   const c = meta.counts || {};
   for (const el of $$('[data-n]')) {
     const k = el.dataset.n;
-    const v = k === 'today' ? c.today : k === 'inbox' ? c.inbox : k === 'all' ? c.all : k.startsWith('s:') ? (c.spaces || {})[k.slice(2)] : 0;
+    const v = k === 'today' ? c.today : k === 'inbox' ? c.inbox : k === 'all' ? c.all : k === 'team' ? meta.teamN : k.startsWith('s:') ? (c.spaces || {})[k.slice(2)] : 0;
     el.textContent = v ? (v > 999 ? '999+' : v) : '';
   }
 }
@@ -166,7 +170,7 @@ async function onShellClick(e) {
 // ---------- меню телефона: легкий нижній аркуш ----------
 // Сьогодні, Вхідні й Усі задачі — на нижній панелі, тут лише решта: пошук, простори, ритуали, інші розділи.
 function phoneMenu() {
-  const c = meta.counts || {}, cur = currentKey;
+  const c = meta.counts || {}, cur = currentKey, teamN = meta.teamN || 0;
   const item = (href, ic, label, n, key) => `<a class="m-item${key === cur ? ' on' : ''}" href="${href}">${icon(ic, 20)}<span>${esc(label)}</span>${n ? `<b>${n}</b>` : ''}</a>`;
   const s = sheet(`<div class="m-sheet">
       <button type="button" class="m-search" data-m="search">${icon('search', 18)}Пошук задач і нотаток</button>
@@ -177,6 +181,8 @@ function phoneMenu() {
       ${item('#/upcoming', 'upcoming', 'Найближчі 7 днів', 0, 'upcoming')}
       ${item('#/' + pref.get('daily-tab', 'rituals'), 'ritual', 'Щоденні завдання', 0, cur === 'habits' ? 'habits' : 'rituals')}
       ${item('#/notes', 'note', 'Нотатки', 0, 'notes')}
+      ${item('#/team', 'users', 'Доручення', teamN, 'team')}
+      ${item('#/challenges', 'trophy', 'Челенджі', 0, 'challenges')}
       ${item('#/record', 'mic', 'Запис голосом', 0, 'record')}
       ${item('#/settings', 'settings', 'Налаштування', 0, 'settings')}
     </div>`, { label: 'Меню' });
@@ -198,12 +204,14 @@ function pageFor(key, parts) {
   if (key === 'notes') return notesPage();
   if (key === 'rituals') return ritualsPage(parts[1]);
   if (key === 'habits') return habitsPage(parts[1]);
+  if (key === 'team') return teamPage(parts);
+  if (key === 'challenges') return challengesPage(parts[1]);
   if (key === 'record') return recordPage();
   if (key === 'settings') return settingsPage(parts[1]);
   return tasksPage({ key: 'today', title: 'Сьогодні', icon: 'sun', area: 'all', view: 'today', group: 'tod', name: account.name });
 }
 const CRUMB = { today: ['sun', 'Сьогодні'], upcoming: ['upcoming', 'Найближчі 7 днів'], all: ['layers', 'Усі задачі'], notes: ['note', 'Нотатки'],
-                rituals: ['ritual', 'Щоденні завдання'], habits: ['ritual', 'Звички'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };
+                rituals: ['ritual', 'Щоденні завдання'], habits: ['ritual', 'Звички'], team: ['users', 'Доручення'], challenges: ['trophy', 'Челенджі'], record: ['mic', 'Запис голосом'], settings: ['settings', 'Налаштування'] };
 let currentPage = '', lastPage = '';
 // показати сторінку без зміни адреси (під екраном ритуалу, якщо застосунок відкрили зі сповіщення)
 function mount(key, parts) {
@@ -223,7 +231,7 @@ function route() {
   if (ritualOpenId()) closeRitual();
   lastPage = location.hash;
   // розділи налаштувань — одна сторінка з якорями; редактор ритуалу — окрема
-  const pageKey = key === 'settings' ? 'settings' : key === 'rituals' || key === 'habits' ? parts.slice(0, 2).join('/') : key;
+  const pageKey = key === 'settings' || key === 'team' ? key : key === 'rituals' || key === 'habits' || key === 'challenges' ? parts.slice(0, 2).join('/') : key;
   if (pageKey !== currentPage || !current) {
     if (current && current.destroy) current.destroy();
     currentPage = pageKey; currentKey = key;
@@ -237,6 +245,8 @@ function route() {
     view.classList.add('enter');
     markActive();
     document.title = `${name} · mdmy`;
+  } else if (key === 'team' && current.route) {
+    current.route(parts);
   } else if (key === 'settings' && parts[1]) {
     const t = document.getElementById('set-' + parts[1]); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }

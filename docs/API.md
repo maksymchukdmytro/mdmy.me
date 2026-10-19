@@ -130,3 +130,37 @@
 
 Бот сам ставить кнопку меню «Задачі», що відкриває `https://<домен>/assistant/` (змінна середовища `PUBLIC_URL` у службі `mdmy`).
 Сторінка бере `initData` з фрагмента адреси (`#tgWebAppData=…`), викликає `POST /api/auth/telegram` і далі працює з токеном.
+
+
+## Вкладення
+| Запит | Опис |
+|---|---|
+| `POST /api/assistant/items/:id/attachments` | Файл — сирим тілом (`Content-Type` файлу, `X-Name: <назва urlencoded>`, до 25 МБ; фото, PDF, документи, таблиці, відео, аудіо) або JSON `{url}` — посилання |
+| `DELETE /api/assistant/attachments/:id` | Прибрати вкладення |
+| `GET /api/assistant/files/<ключ>` | Файл (лише власнику) |
+
+## Доручення (`/api/team/…`)
+| Запит | Опис |
+|---|---|
+| `GET /api/team` | `{me {id, pub_id, name}, bosses, members, counts {todo, review, checks}}` |
+| `POST /api/team/allow {pub_id}` | Дозволити акаунту з цим ID давати мені задачі |
+| `DELETE /api/team/bosses/:id`, `DELETE /api/team/members/:id` | Відкликати дозвіл / прибрати з команди |
+| `GET /api/team/tasks?role=member\|boss` | Мої доручення / доручені мною |
+| `POST /api/team/tasks {member_id, text, description?, due_at?, need_proof?}` | Доручити |
+| `GET / PATCH / DELETE /api/team/tasks/:id` | Деталі (з `files`), змінити, видалити (той, хто доручив) |
+| `POST /api/team/tasks/:id/files` | Доказ від виконавця (як вкладення) |
+| `POST /api/team/tasks/:id/submit {report}` | Здати на перевірку |
+| `POST /api/team/tasks/:id/review {verdict: approve\|rework\|fail, note}` | Перевірка; для rework коментар обовʼязковий |
+| `GET /api/shared/<ключ>`, `DELETE /api/shared/files/:id` | Файл-доказ (учасникам) / прибрати свій |
+
+## Челенджі (`/api/challenges/…`)
+| Запит | Опис |
+|---|---|
+| `GET /api/challenges` | Мої (створені й ті, де я учасник) |
+| `POST /api/challenges {title, description?, days, start_day?, confirm?, need_proof?}` | Створити (повертає `code`) |
+| `POST /api/challenges/join {code}` | Долучитися |
+| `GET / PATCH / DELETE /api/challenges/:id` | Деталі (`myDays`, `board`, для автора `queue`), змінити / завершити (`closed`), видалити |
+| `POST /api/challenges/:id/check {note?, day?, final: true}` | Відмітка за сьогодні або вчора; `{undo: true}` — скасувати |
+| `POST /api/challenges/:id/files?day=` | Доказ до відмітки |
+| `POST /api/challenges/:id/review/:checkId {ok}` | Автор підтверджує / відхиляє |
+| `POST /api/challenges/:id/leave` | Вийти |

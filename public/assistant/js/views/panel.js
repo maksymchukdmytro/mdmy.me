@@ -1,5 +1,6 @@
 // Бічна картка задачі (як сторінка в Notion): назва, властивості, підзадачі, опис. Усе зберігається одразу.
 import { get, patch, del, post } from '../api.js';
+import { attachHtml, bindAttach, uploadFile } from './attach.js';
 import { icon, STATUS_ICON } from '../icons.js';
 import { $, esc, fmtDate, fmtDue, localInput, menu, confirmBox, toast, fail, autosize, debounce, isPhone, sheet, dragToClose } from '../ui.js';
 import { meta, space, status, openSpaces } from '../store.js';
@@ -141,6 +142,10 @@ function render() {
         <h3>${icon('text', 15)}Опис</h3>
         <textarea class="p-desc" placeholder="Деталі, кроки, контакти, посилання…">${esc(it.description || '')}</textarea>
       </section>
+      <section class="p-sec p-att-sec">
+        <h3>${icon('paperclip', 15)}Вкладення</h3>
+        <div class="p-att">${attachHtml(it.attachments)}</div>
+      </section>
       <p class="p-meta">Створено ${esc(fmtDate(it.created))}${it.updated ? ` · змінено ${esc(fmtDate(it.updated))}` : ''}${it.done && it.done_at ? ` · виконано ${esc(fmtDate(it.done_at))}` : ''}</p>
     </div>`;
   subsCount();
@@ -150,6 +155,15 @@ function render() {
     // написав і перейшов деінде — не губимо текст
     sf.querySelector('input').addEventListener('blur', e => { if (e.target.value.trim() && !(e.relatedTarget && e.relatedTarget.classList.contains('sub-go'))) addSub(e.target, true); });
   }
+  // вкладення: фото, файли, посилання (для звітів)
+  const attBox = panel.querySelector('.p-att'), itemId = it.id;
+  const reAtt = async () => { const f = await get('assistant/items/' + itemId); if (cur && cur.it.id === itemId) { cur.it.attachments = f.attachments; attBox.innerHTML = attachHtml(f.attachments); changed(); } };
+  bindAttach(attBox, {
+    upload: f => uploadFile(`assistant/items/${itemId}/attachments`, f),
+    link: url => post(`assistant/items/${itemId}/attachments`, { url }),
+    remove: id => del('assistant/attachments/' + id),
+    after: reAtt
+  });
   const ta = panel.querySelector('.p-title textarea'), desc = panel.querySelector('.p-desc');
   autosize(ta); autosize(desc);
   ta.addEventListener('input', () => { autosize(ta); if (ta.value.trim()) saveTitle(ta.value.trim()); });

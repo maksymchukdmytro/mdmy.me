@@ -22,7 +22,7 @@ export function settingsPage(sub) {
     root = el;
     root.innerHTML = `<div class="page settings">
       <div class="page-head"><h1 class="page-title">Налаштування</h1></div>
-      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['style', 'Стиль спілкування'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['devices', 'Пристрої'], ['account', 'Обліковий запис'], ['google', 'Вхід через Google'], ['users', 'Користувачі']]
+      <nav class="set-nav">${[['spaces', 'Простори'], ['ai', 'Асистент'], ['style', 'Стиль спілкування'], ['notify', 'Сповіщення'], ['tg', 'Telegram'], ['plan', 'Розклад'], ['look', 'Вигляд'], ['team', 'Команда'], ['devices', 'Пристрої'], ['account', 'Обліковий запис'], ['google', 'Вхід через Google'], ['users', 'Користувачі']]
         .map(([k, l]) => `<a href="#/settings/${k}" data-k="${k}"${ADMIN.includes(k) ? ' hidden' : ''}>${l}</a>`).join('')}</nav>
 
       <section class="set" id="set-spaces">
@@ -78,6 +78,15 @@ export function settingsPage(sub) {
         <p class="muted small">Гарячі клавіші: <kbd>Ctrl K</kbd> або <kbd>/</kbd> — пошук і перехід, <kbd>N</kbd> — нова задача, <kbd>B</kbd> — список ↔ дошка, <kbd>Esc</kbd> — закрити.</p>
       </section>
 
+      <section class="set" id="set-team">
+        <h2>Команда</h2>
+        <p class="muted">Доручення між акаунтами mdmy: хтось дає вам задачу, ви виконуєте й надсилаєте звіт із фото чи файлом, він підтверджує. Усе — у розділі «Доручення».</p>
+        <div class="kv"><span>Мій ID</span><div class="inline"><b class="team-id"></b><button type="button" class="link" data-a="copy-id">копіювати</button></div></div>
+        <div class="kv"><span>Отримувати задачі від</span><div><form class="inline team-allow"><input placeholder="ID людини, напр. K7Q2XP" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" style="width:200px"><button class="btn sm primary" type="submit">Дозволити</button></form>
+          <p class="muted small">Ця людина зможе давати вам задачі й бачити ваші звіти до них — і нічого більше з ваших записів.</p></div></div>
+        <div class="team-lists"></div>
+      </section>
+
       <section class="set" id="set-devices">
         <h2>Пристрої й входи</h2>
         <p class="muted">Звідки зараз виконано вхід: браузери, застосунок Android, Telegram. Для застосунків — вхід по токену через <code>POST /api/auth/token</code> (див. docs/API.md у репозиторії).</p>
@@ -123,7 +132,11 @@ export function settingsPage(sub) {
     root.addEventListener('click', onClick);
     root.addEventListener('change', onChange);
     $$('[data-theme]', root).forEach(b => b.setAttribute('aria-checked', String(b.dataset.theme === pref.get('theme', 'system'))));
-    drawSpaces(); load(); loadSessions(); drawPush(); loadMe();
+    drawSpaces(); load(); loadSessions(); drawPush(); loadMe(); loadTeam();
+    $('.team-allow', root).addEventListener('submit', async e => {
+      e.preventDefault(); const inp = $('input', e.target);
+      try { loadTeam(await post('team/allow', { pub_id: inp.value })); inp.value = ''; toast('Дозволено'); } catch (err) { fail(err); }
+    });
     if (sub) setTimeout(() => { const t = $('#set-' + sub, root); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   }
   async function load() {
@@ -208,6 +221,16 @@ export function settingsPage(sub) {
       inp.addEventListener('input', () => { btn.disabled = inp.value.trim().toUpperCase() !== word; });
       $('form', s.el).addEventListener('submit', e => { e.preventDefault(); if (btn.disabled) return; done = true; s.close(); resolve(word); });
     });
+  }
+
+  // ---------- команда ----------
+  async function loadTeam(t) {
+    try { t = t || await get('team'); } catch (e) { return; }
+    $('.team-id', root).textContent = t.me.pub_id;
+    const row = (p, kind) => `<div class="sess">${icon('users', 16)}<span><b>${esc(p.name)}</b> <span class="muted small">${esc(p.pub_id)}</span></span>
+      <button type="button" class="icon-btn xs" data-a="team-del" data-kind="${kind}" data-id="${p.id}" title="${kind === 'bosses' ? 'Заборонити давати мені задачі' : 'Прибрати з команди'}">${icon('x', 14)}</button></div>`;
+    $('.team-lists', root).innerHTML = (t.bosses.length ? `<p class="small muted" style="margin:12px 0 4px">Можуть давати мені задачі:</p>${t.bosses.map(b => row(b, 'bosses')).join('')}` : '') +
+      (t.members.length ? `<p class="small muted" style="margin:12px 0 4px">Я можу давати задачі:</p>${t.members.map(m => row(m, 'members')).join('')}` : '');
   }
 
   // ---------- простори ----------
@@ -304,6 +327,10 @@ export function settingsPage(sub) {
     if (k === 'delete-account') {
       if (await typed('ВИДАЛИТИ', 'Акаунт і всі його дані буде видалено з сервера назавжди.', 'Видалити акаунт') !== 'ВИДАЛИТИ') return;
       try { await post('account/delete', { confirm: 'ВИДАЛИТИ' }); toast('Акаунт видалено'); setTimeout(() => location.replace('/assistant/'), 800); } catch (err) { fail(err); }
+    }
+    if (k === 'copy-id') navigator.clipboard.writeText($('.team-id', root).textContent).then(() => toast('ID скопійовано'), () => {});
+    if (k === 'team-del' && await confirmBox(a.dataset.kind === 'bosses' ? 'Заборонити цій людині давати вам задачі?' : 'Прибрати людину з команди? Давати їй задачі більше не вийде.', { ok: 'Так' })) {
+      try { loadTeam(await api('team/' + a.dataset.kind + '/' + a.dataset.id, { method: 'DELETE' })); } catch (err) { fail(err); }
     }
     if (k === 'copy-redirect') navigator.clipboard.writeText($('.g-redirect', root).textContent).then(() => toast('Скопійовано'), () => {});
     if (k === 'google-clear' && await confirmBox('Видалити секрет Google? Вхід через Google вимкнеться.')) { try { await post('admin/auth', { clearSecret: true }); loadGoogle(); } catch (err) { fail(err); } }

@@ -8,7 +8,11 @@ export const onMeta = f => { subs.add(f); return () => subs.delete(f); };
 let pending = null;
 export async function refreshMeta() {
   if (pending) return pending;
-  pending = get('assistant/meta').then(d => { Object.assign(meta, d); subs.forEach(f => f(meta)); return meta; }).finally(() => { pending = null; });
+  // лічильник «Доручень»: мені зробити + мені перевірити (доручення й відмітки челенджів)
+  pending = Promise.all([get('assistant/meta'), get('team').catch(() => null)]).then(([d, t]) => {
+    Object.assign(meta, d); meta.teamN = t ? t.counts.todo + t.counts.review + t.counts.checks : 0;
+    subs.forEach(f => f(meta)); return meta;
+  }).finally(() => { pending = null; });
   return pending;
 }
 export const space = key => meta.spaces.find(s => s.key === key) || { key, name: key, icon: 'folder' };
