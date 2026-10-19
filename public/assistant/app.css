@@ -852,7 +852,7 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .has-panel .fab,.bulk-on .fab,.selecting .fab{transform:scale(0);opacity:0;pointer-events:none}
 .cmp-wrap{position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0);transition:background .25s}
 .cmp-wrap.in{background:var(--scrim)}
-.cmp{position:absolute;left:0;right:0;top:0;height:var(--vh,100dvh);display:flex;flex-direction:column;background:var(--bg);
+.cmp{position:absolute;left:0;right:0;top:var(--vt,0px);height:var(--vh,100dvh);display:flex;flex-direction:column;background:var(--bg);
      padding:calc(8px + env(safe-area-inset-top)) 18px 14px;opacity:0;transform:translateY(28px);transition:opacity .22s,transform .32s var(--spring)}
 .cmp-wrap.in .cmp{opacity:1;transform:none}
 .cmp-wrap.out .cmp{opacity:0;transform:translateY(20px);transition-duration:.18s}

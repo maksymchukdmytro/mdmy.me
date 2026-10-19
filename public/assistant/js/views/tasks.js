@@ -188,7 +188,8 @@ export function tasksPage(cfg) {
     if (st.showDone) return ['done', 'Виконані'];
     if (st.group === 'status') return [it.status, status(it.status).name];
     if (st.group === 'space' && !st.space) return [it.area, space(it.area).name];
-    if (st.group === 'date' || st.group === 'space') {       // вибрано один простір — групуємо за строком const b = dueBucket(it); return [b, BUCKETS[b]]; }
+    // вибрано один простір — групуємо за строком
+    if (st.group === 'date' || st.group === 'space') { const b = dueBucket(it); return [b, BUCKETS[b]]; }
     if (st.group === 'tod') {
       if (it.overdue) return ['late', TOD.late];
       if (!it.due_at) return ['nodate', TOD.nodate];

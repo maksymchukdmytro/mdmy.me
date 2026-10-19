@@ -32,8 +32,9 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       </div></form>`;
     document.body.append(w);
     // висота — за видимою частиною екрана (над клавіатурою), щоб кнопки не ховались
-    const vv = window.visualViewport, fit = () => w.style.setProperty('--vh', vv.height + 'px');
-    if (vv) { fit(); vv.addEventListener('resize', fit); }
+    // і зсув видимої частини: у браузері (не в застосунку) з клавіатурою сторінка може бути прокручена під нею
+    const vv = window.visualViewport, fit = () => { w.style.setProperty('--vh', vv.height + 'px'); w.style.setProperty('--vt', vv.offsetTop + 'px'); };
+    if (vv) { fit(); vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
     requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('in')));
     const f = w.querySelector('form'), ta = w.querySelector('.cmp-in'), chips = w.querySelector('.cmp-chips'), subsBox = w.querySelector('.cmp-subs');
     const statusEl = w.querySelector('.cmp-status'), mic = w.querySelector('.cmp-mic'), modeBtn = w.querySelector('.cmp-mode');
@@ -129,7 +130,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
     const close = () => {
       cancelRec();
       document.removeEventListener('keydown', key, true);
-      if (vv) vv.removeEventListener('resize', fit);
+      if (vv) { vv.removeEventListener('resize', fit); vv.removeEventListener('scroll', fit); }
       w.classList.remove('in'); w.classList.add('out');
       setTimeout(() => w.remove(), 320); resolve(result);
     };
