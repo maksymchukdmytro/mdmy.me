@@ -7,7 +7,8 @@ import { icon } from '../icons.js';
 import { esc, toast, menu, localInput, fmtDue } from '../ui.js';
 import { space, openSpaces } from '../store.js';
 import { datePicker } from './panel.js';
-import { recorder, micError, transcribe, history } from '../voice.js';
+import { recorder, micError } from '../voice.js';
+import { runVoice } from '../bgvoice.js';
 
 const PRIO = ['Без пріоритету', 'Важлива', 'Термінова'];
 const changed = () => document.dispatchEvent(new CustomEvent('mdmy:changed'));
@@ -17,8 +18,8 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
     const st = { area: area === 'all' ? 'inbox' : area, due, prio: 0, remind: false, ai: false };
     const w = document.createElement('div'); w.className = 'cmp-wrap';
     w.innerHTML = `<form class="cmp" role="dialog" aria-modal="true" aria-label="Нова задача">
-      <header class="cmp-top"><button type="button" class="cmp-x" data-x aria-label="Закрити">${icon('x', 20)}</button>
-        <button type="button" class="cmp-mode" data-c="mode"></button></header>
+      <header class="cmp-top"><button type="button" class="cmp-mode" data-c="mode"></button>
+        <button type="button" class="cmp-x" data-x aria-label="Закрити">${icon('x', 20)}</button></header>
       <div class="cmp-mid">
         <textarea class="cmp-in" rows="1" placeholder="Що треба зробити?" maxlength="2000" enterkeyhint="send"></textarea>
         <p class="cmp-status"></p>
@@ -64,7 +65,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
     });
 
     // ---------- голос ----------
-    let rec = null, recTimer = 0, busy = false, viaVoice = false;
+    let rec = null, recTimer = 0, busy = false;
 
     function drawMode() {
       modeBtn.innerHTML = st.ai ? `${icon('list', 16)}<span>Вручну</span>` : `${icon('sparkles', 16)}<span>Асистент</span>`;
@@ -108,24 +109,21 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       show(); recTimer = setInterval(show, 500);
       if (navigator.vibrate) navigator.vibrate(15);
     }
+    // Запис зупинено: вікно одразу згортається, розшифровка й розбір асистентом ідуть у фоні (bgvoice.js) —
+    // плашка внизу покаже результат з «Переглянути» і «Скасувати»
     async function finish() {
       const r = rec; rec = null; clearInterval(recTimer);
       mic.classList.remove('on'); mic.style.setProperty('--lv', 0);
-      busy = true; mic.classList.add('busy'); status('<span class="spin"></span>Розшифровую…', 'live');
-      try {
-        const t = await transcribe(await r.stop());
-        const text = (t.text || '').trim();
-        if (!text) { status('Нічого не почув — спробуй ще раз', 'err'); return; }
-        ta.value = (ta.value.trim() ? ta.value.trim() + ' ' : '') + text;
-        history.add({ text, duration: t.duration, at: Date.now() });
-        grow(); syncGo();
-        // сказане голосом одразу розбирає асистент: строк, простір, повтор, нагадування
-        busy = false; mic.classList.remove('busy');
-        viaVoice = true; f.requestSubmit();
-      } catch (err) { status(esc(err.message), 'err'); }
-      finally { busy = false; mic.classList.remove('busy'); }
+      let blob; try { blob = await r.stop(); } catch (err) { status(esc(err.message), 'err'); return; }
+      runVoice(blob, { prefix: ta.value.trim(), hint: hintText() });
+      close();
     }
 
+    // що вибрано вручну — підказкою асистенту
+    function hintText() {
+      const hint = [st.area !== 'inbox' ? 'простір: ' + space(st.area).name : '', !st.ai && st.due ? 'строк: ' + fmtDue(st.due) : '', !st.ai && st.prio ? PRIO[st.prio].toLowerCase() : ''].filter(Boolean);
+      return hint.length ? ` (${hint.join(', ')})` : '';
+    }
     let result = null;
     const close = () => {
       cancelRec();
@@ -160,11 +158,9 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
       const text = ta.value.trim(); if (!text) return listen();
       const btn = f.querySelector('.cmp-go'); btn.disabled = true;
       try {
-        if (st.ai || viaVoice) {
+        if (st.ai) {
           status('<span class="spin"></span>Асистент розбирає…', 'live');
-          // що вибрано вручну — підказкою асистенту
-          const hint = [st.area !== 'inbox' ? 'простір: ' + space(st.area).name : '', !st.ai && st.due ? 'строк: ' + fmtDue(st.due) : '', !st.ai && st.prio ? PRIO[st.prio].toLowerCase() : ''].filter(Boolean);
-          const sp = hint.length ? ` (${hint.join(', ')})` : '';
+          const sp = hintText();
           const r = await post('assistant/message', { text: text + sp });
           toast([r.reply, ...(r.done || [])].filter(Boolean).join('\n') || 'Записав', r.undoable ? async () => { await post('assistant/undo', { msgId: r.msgId }); changed(); } : null, 6000);
           result = r.items && r.items[0] ? r.items[0].id : null;
@@ -176,7 +172,7 @@ export function compose({ area = 'inbox', due = null, voice = false } = {}) {
         }
         if (navigator.vibrate) navigator.vibrate(12);
         changed(); close();
-      } catch (err) { status(esc(err.message), 'err'); btn.disabled = false; viaVoice = false; }
+      } catch (err) { status(esc(err.message), 'err'); btn.disabled = false; }
     });
 
     drawMode(); syncGo();

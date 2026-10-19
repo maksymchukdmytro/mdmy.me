@@ -1227,3 +1227,29 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 body.dnd-on .fab{transform:scale(0);opacity:0}
 .card.ghost{transition:scale .15s var(--ease),opacity .15s}.card.ghost.over{scale:.62;opacity:.7}
 .u-warn{display:block;color:var(--red)}.sess.off{opacity:.55}
+
+/* голос у фоні (bgvoice.js): плашки над нижньою панеллю — розшифровка й розбір ідуть, поки користуєтесь застосунком */
+.vjobs{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:290;display:flex;flex-direction:column;gap:8px;width:min(480px,calc(100vw - 24px));pointer-events:none}
+@media (max-width:899px){.vjobs{bottom:calc(72px + env(safe-area-inset-bottom))}}
+.vjob{pointer-events:auto;display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow-lg);
+      opacity:0;transform:translateY(14px) scale(.97);transition:opacity .22s,transform .34s var(--spring)}
+.vjob.in{opacity:1;transform:none}
+.vjob.out{opacity:0;transform:translateY(10px) scale(.97);transition-duration:.2s}
+.vjob .spin{flex:none;margin:0;border-color:rgba(127,127,127,.4);border-top-color:currentColor}
+.vjob>.ic{flex:none}
+.vjob.ok>.ic{color:var(--green)}
+.vjob.err>.ic{color:var(--red)}
+.vj-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-size:14px;line-height:1.35}
+.vj-t b{font-weight:500;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vj-t small{font-size:12.5px;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vj-s{flex:none;font-size:12.5px;opacity:.6;font-variant-numeric:tabular-nums;padding-right:6px}
+.vjob button{flex:none;height:34px;padding:0 11px;border:0;border-radius:9px;background:rgba(127,127,127,.24);color:inherit;font-size:13.5px;font-weight:500}
+.vjob button:active{transform:scale(.95)}
+.vjob .vj-x{width:34px;padding:0;display:grid;place-items:center;background:transparent;opacity:.7}
+.vjob.ok{flex-direction:column;align-items:stretch;gap:6px;padding:10px 8px 8px 14px}
+.vj-row{display:flex;align-items:center;gap:10px}
+.vj-row>.ic{flex:none;color:var(--green)}
+.vj-acts{display:flex;gap:6px;justify-content:flex-end}
+.vjob.ok .vj-t small{white-space:normal}
+/* поки є плашки — кнопка «+» не заважає */
+.vjobs-on .fab{opacity:0;pointer-events:none;transform:scale(.8)}

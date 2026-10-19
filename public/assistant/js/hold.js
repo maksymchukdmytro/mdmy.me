@@ -6,6 +6,7 @@ import { go } from './nav.js';
 import { recorder, micError, transcribe, history, ask, MAX_SEC } from './voice.js';
 import { post } from './api.js';
 import { compose } from './views/composer.js';
+import { runVoice } from './bgvoice.js';
 
 const HOLD_MS = 250, CANCEL_PX = 70;
 
@@ -82,6 +83,8 @@ function session(btn) {
 }
 
 async function send(blob) {
+  // з асистентом — у фоні, плашкою внизу (як у вікні нової задачі)
+  if (pref.get('voice-assist', true)) return runVoice(blob);
   toast('Розшифровую…', null, 60000);
   let item;
   try {
