@@ -1,6 +1,6 @@
 # mdmy.me (by Maksymchuk Dmytro) — нотатки для Claude Code
 
-Особистий робочий сайт на домені mdmy.me: персональний асистент (`/assistant/`: задачі, нотатки, ритуали дня) і видаткові накладні з LP-CRM (`/nakladna/`).
+Особистий робочий сайт на домені mdmy.me: персональний асистент (головна сторінка `/`: задачі, нотатки, ритуали дня) і видаткові накладні з LP-CRM (`/nakladna/`).
 Окремий проєкт від OctoType (octotype.tech, репозиторій maksymchukdmytro/octotype): спільний лише сервер. Код, база, вхід, служби й nginx — свої.
 Інтерфейс і тексти — українською. Чистий JS без збирання; сервер — Node.js без фреймворків, база — better-sqlite3.
 
@@ -18,7 +18,8 @@
 
 ## Структура
 - `server.js` — статичні файли з `public/` (розділи `nakladna`, `assistant` віддаються з `X-Frame-Options: DENY`), `/api/*` і `/m/<файл>` (медіа ритуалів).
-  Старі адреси `/speachtotext` → 301 на `/assistant/`.
+  Застосунок — з кореня: `/` віддає `public/index.html` (CSP_APP), файли застосунку — `/assistant/…`, сервіс-воркер — `/sw.js` (scope `/`, файл `public/assistant/sw.js`).
+  Старі адреси `/assistant/`, `/speachtotext` → 301 на `/` (параметри зберігаються). Клієнт переносить push-підписку старого воркера (scope /assistant/) на новий (`push.js` moveOldSub).
 - `lib/auth.js` — `/api/login|logout|me|password`; cookie `mdmy_session` (Path=/, HttpOnly, SameSite=Strict, 30 днів);
   усі запити, крім GET, вимагають заголовок `X-MDMY: 1`. Обмеження спроб входу — 8 за 10 хв з IP.
 - `lib/db.js` — схема (PRAGMA user_version, зараз 12): `accounts` (role, ws, google_sub, email, pub_id), `sessions`, `audit`, `meta` (налаштування: `nakladna_settings`, `nakladna_index`, `assistant_settings`)
@@ -27,7 +28,7 @@
   за датами, відповідність кешується в meta `nakladna_index`; назви товарів — getProduct. PDF у браузері (pdfmake і шрифт Inter у `public/nakladna/vendor/`,
   шаблон `public/nakladna/invoice.js`). Спосіб доставки: delivery_id з CRM → назва з `deliveryMap` (запам'ятовується зі сторінки).
   Адреса CRM, API-ключ і реквізити — у meta `nakladna_settings`; ключ не віддається в браузер і не комітиться. API `/api/nakladna/*`.
-- `public/assistant/` — застосунок «mdmy» (задачі й асистент) у стилі Notion: монохром, лінійні іконки (`js/icons.js`), світла/темна тема.
+- `public/index.html` + `public/assistant/` — застосунок «mdmy» (задачі й асистент) у стилі Notion: монохром, лінійні іконки (`js/icons.js`), світла/темна тема.
   ES-модулі без збирання: `js/main.js` (оболонка: бічна панель, нижня панель на телефоні, маршрути `#/…`, вхід, Ctrl+K-палітра),
   `js/nav.js` (маршрути), `js/api.js` (cookie + `X-MDMY`, у Telegram Web App — Bearer), `js/store.js` (довідники й лічильники), `js/ui.js` (меню, діалоги, тости, дати),
   `js/views/tasks.js` (сторінка простору / «Сьогодні» / «Найближчі» / «Усі»: список із групами, канбан з перетягуванням мишею й пальцем, фільтри, масові дії, розбір «Вхідних» по одній — у кінці анімація галочки, смужка згортається; кнопка «+» внизу праворуч і на компʼютері),
@@ -52,7 +53,7 @@
   (todo / doing / waiting / done — колонки канбану; статус «done» ⇔ `done_at`), у задачі `status`, `position` (порядок у колонці), `description`.
   API для всіх клієнтів (веб, Android, Telegram Web App) — `docs/API.md`; змінюючи API, оновлюйте й цей файл.
 - Вхід для застосунків: `POST /api/auth/token` → Bearer-токен; Telegram Web App: `POST /api/auth/telegram` (initData; акаунт, до якого привʼязаний цей Telegram).
-  Бот ставить кнопку меню «Задачі» на `PUBLIC_URL/assistant/` (`PUBLIC_URL` задає deploy.sh у службі).
+  Бот ставить кнопку меню «Задачі» на `PUBLIC_URL/` (`PUBLIC_URL` задає deploy.sh у службі).
 - Push-сповіщення (міграція v4, `push_subscriptions`): `lib/push.js` (бібліотека `web-push`, ключі VAPID у meta `push_vapid`, підписані токени кнопок),
   сервіс-воркер `public/assistant/sw.js` (без кешування; кнопки «Готово» / «+1 год» → `POST /api/push/action`), фронтенд `js/push.js` + розділ «Сповіщення» в налаштуваннях
   і одноразова пропозиція увімкнути. Таймер асистента шле нагадування в усі канали (Telegram і push); невідправлені нагадування, прострочені понад 12 год, не надсилаються.
@@ -81,9 +82,9 @@
   Бюджет на Claude (meta `ai_budget` {usd, stop}, стан сповіщень — `ai_budget_state`): вичерпано — асистент окремих баз (не адмінів) відмовляє (`opts.budget` у claude()),
   адмінам — Telegram і push на 80% / 100% (`admin.tick` кожні 10 хв). Резервні копії: `lib/backup.js` (make / list / verify; спільне з manage.js), розділ «Резервні копії»
   (зробити зараз, перевірити; автоперевірка свіжої копії раз на тиждень — meta `backup_check`, тривога, якщо копії не було понад 2 доби). Розділ «Система» — стан і журнал оновлень.
-- Роль `nakladna` — обліковий запис лише для накладних: `/api/nakladna/*`, решту API закриває `blocked` у server.js, `/assistant/` переводить на `/nakladna/` (`me.only`).
+- Роль `nakladna` — обліковий запис лише для накладних: `/api/nakladna/*`, решту API закриває `blocked` у server.js, застосунок переводить на `/nakladna/` (`me.only`).
   Разові облікові записи (`SEED` у db.js, лише хеш пароля): `admin` (роль nakladna, основна база) — ставиться один раз під час оновлення.
-- Безпека сторінок: CSP для /assistant/ (лише власні скрипти, без inline), HSTS, Referrer-Policy, Permissions-Policy (server.js `SECURITY`, `CSP_APP`);
+- Безпека сторінок: CSP для застосунку (лише власні скрипти, без inline), HSTS, Referrer-Policy, Permissions-Policy (server.js `SECURITY`, `CSP_APP`);
   перебір ID і кодів челенджів — не більше 20 спроб за 10 хв на акаунт.
 - Окремі бази облікових записів (міграція v8, `accounts.ws`): `DATA_DIR/ws/<ws>/mdmy.db` (+ `media/`) — свої задачі, нотатки, звички, ритуали, push;
   NULL — основна база власника. `server.js` → `workspace(ws)` створює екземпляр `assistant.make(db, {shared, ws, allow})`: ключ Claude, модель і бот — з основної бази,
@@ -95,8 +96,8 @@
   без зміни пароля, сесій, накладних і завантаження медіа; асистент і розшифровка — до 40 запитів на день.
 - Вхід і реєстрація через Google (міграція v9, `lib/google.js`): OIDC authorization code + PKCE + state + nonce (підписаний cookie `mdmy_oauth`, 10 хв);
   id_token напряму з токен-ендпоінта Google, перевіряються iss / aud / exp / nonce / email_verified; шукаємо за `google_sub`, не за поштою.
-  Новий користувач — `createUser` (роль user, своя база `u<id>`, без пароля: hash = ''), редірект на `/assistant/?welcome=1` (привітання, часовий пояс з пристрою).
-  `?link=1` — привʼязати Google до поточного акаунта (власник теж може входити через Google). Помилки — `/assistant/?auth_error=…`.
+  Новий користувач — `createUser` (роль user, своя база `u<id>`, без пароля: hash = ''), редірект на `/?welcome=1` (привітання, часовий пояс з пристрою).
+  `?link=1` — привʼязати Google до поточного акаунта (власник теж може входити через Google). Помилки — `/?auth_error=…`.
   Налаштування (meta `auth_settings`: Client ID, секрет, signup, userLimit, contact) — розділ «Вхід через Google» лише для адміна; `GET /api/auth/config` — публічно.
   Адреса повернення: `PUBLIC_URL/api/auth/google/callback`. Тести — макет через `GOOGLE_AUTH_URL` і `GOOGLE_TOKEN_URL`.
 - Обліковий запис (server.js `/api/account/*`): «Почати спочатку» (`reset`, слово ОЧИСТИТИ) — `lib/wipe.js` стирає всі записи й медіа, лишає акаунт, налаштування, Telegram, push;

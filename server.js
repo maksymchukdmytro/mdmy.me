@@ -1,7 +1,8 @@
 // Сервер mdmy.me (by Maksymchuk Dmytro).
 //  • /                — головна сторінка;
 //  • /nakladna/       — видаткові накладні з LP-CRM у PDF;
-//  • /assistant/      — персональний асистент: голос і текст → задачі, нагадування, нотатки, ритуали дня, Telegram-бот;
+//  • /                — персональний асистент (застосунок mdmy): голос і текст → задачі, нагадування, нотатки, ритуали дня, Telegram-бот;
+//                       його файли — /assistant/… (js, css, іконки), сервіс-воркер — /sw.js; стара адреса /assistant/ → 301 на /;
 //  • /m/<файл>        — фото й відео ритуалів власника (випадкові імена, без входу — їх забирають Telegram і сповіщення);
 //    /m/u5/<файл>     — медіа окремої бази: за сесією її власника або за підписаним посиланням;
 //  • /api/*           — вхід (lib/auth.js) і API розділів; усе, крім входу, лише після входу.
@@ -206,18 +207,21 @@ const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; char
                 '.png':'image/png', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.txt':'text/plain; charset=utf-8',
                 '.webmanifest':'application/manifest+json' };
 const SECTIONS = ['nakladna', 'assistant', 'admin'];                 // сторінки, що працюють лише після входу
-const REDIRECTS = { '/speachtotext': '/assistant/', '/speachtotext/': '/assistant/', '/speechtotext': '/assistant/', '/speechtotext/': '/assistant/' };
+const REDIRECTS = { '/speachtotext': '/', '/speachtotext/': '/', '/speechtotext': '/', '/speechtotext/': '/', '/assistant': '/', '/assistant/': '/', '/assistant/index.html': '/' };
+// застосунок відкривається з кореня сайту; сервіс-воркер — з кореня, щоб керувати всім сайтом (файл лежить у public/assistant/)
+const ROOT_FILES = { '/sw.js': 'assistant/sw.js' };
 
 function serveStatic(req, res, url) {
-  if (REDIRECTS[url]) { res.writeHead(301, { Location: REDIRECTS[url] }); return res.end(); }
+  // ?welcome=1, ?auth_error=… переносяться; #/… браузер зберігає сам
+  if (REDIRECTS[url]) { const q = req.url.indexOf('?'); res.writeHead(301, { Location: REDIRECTS[url] + (q >= 0 ? req.url.slice(q) : '') }); return res.end(); }
   if (SECTIONS.includes(url.slice(1))) { res.writeHead(301, { Location: url + '/' }); return res.end(); }
   if (url.endsWith('/')) url += 'index.html';
-  const rel = path.normalize(url).replace(/^[/\\]+/, '');
+  const rel = ROOT_FILES[url] || path.normalize(url).replace(/^[/\\]+/, '');
   if (rel.includes('..') || rel.split(/[/\\]/).some(p => p.startsWith('.'))) { res.writeHead(404); return res.end('Не знайдено'); }
   const file = path.join(PUBLIC, rel);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Не знайдено'); }
-    const top = rel.split(/[/\\]/)[0];
+    const top = rel === 'index.html' ? 'assistant' : rel.split(/[/\\]/)[0];      // головна сторінка — застосунок
     const headers = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', ...SECURITY };
     if (SECTIONS.includes(top)) {
       // асистент можна відкривати як Telegram Web App (у вебверсії Telegram це iframe); решту — лише напряму.

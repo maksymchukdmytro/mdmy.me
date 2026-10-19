@@ -73,7 +73,7 @@ function showLogin(err = '') {
       <label class="field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required></label>
       <button class="btn primary wide" type="submit">Увійти</button>
     </form>
-    <p class="muted small center">Входите через Google? Увійдіть у <a href="/assistant/">mdmy</a> і поверніться сюди.</p>
+    <p class="muted small center">Входите через Google? Увійдіть у <a href="/">mdmy</a> і поверніться сюди.</p>
   </div></main>`;
   const f = $('#lf'); f.login.focus();
   f.addEventListener('submit', async e => {
@@ -91,7 +91,7 @@ function shell() {
       <a class="adm-brand" href="#/overview"><span class="ws-logo">${wordmark}</span><span class="adm-tag">Адмінка</span></a>
       <nav class="adm-nav">${NAV.map(([k, l, ic]) => `<a href="#/${k}" data-k="${k}">${icon(ic, 16)}<span>${l}</span></a>`).join('')}</nav>
       <div class="adm-foot">
-        <a href="/assistant/#/today">${icon('arrowRight', 15)}<span>До mdmy</span></a>
+        <a href="/#/today">${icon('arrowRight', 15)}<span>До mdmy</span></a>
         <span class="muted small">${esc(me.name)} · ${esc(me.login)}</span>
       </div>
     </aside>
@@ -127,7 +127,7 @@ async function boot() {
   try { me = (await get('me')).account; } catch (e) { return showLogin(); }
   if (!me.admin) {
     app.innerHTML = `<main class="login"><div class="login-card"><div class="login-logo"><span class="ws-logo lg">${wordmark}</span></div>
-      <p class="center">Адмінка — лише для адміністраторів.</p><a class="btn wide" href="/assistant/">Повернутися в mdmy</a></div></main>`;
+      <p class="center">Адмінка — лише для адміністраторів.</p><a class="btn wide" href="/">Повернутися в mdmy</a></div></main>`;
     return;
   }
   shell(); route();

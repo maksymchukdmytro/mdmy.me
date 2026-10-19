@@ -290,7 +290,7 @@ export function settingsPage(sub) {
     }
     if (k === 'delete-account') {
       if (await typed('ВИДАЛИТИ', 'Акаунт і всі його дані буде видалено з сервера назавжди.', 'Видалити акаунт') !== 'ВИДАЛИТИ') return;
-      try { await post('account/delete', { confirm: 'ВИДАЛИТИ' }); toast('Акаунт видалено'); setTimeout(() => location.replace('/assistant/'), 800); } catch (err) { fail(err); }
+      try { await post('account/delete', { confirm: 'ВИДАЛИТИ' }); toast('Акаунт видалено'); setTimeout(() => location.replace('/'), 800); } catch (err) { fail(err); }
     }
     if (k === 'copy-id') navigator.clipboard.writeText($('.team-id', root).textContent).then(() => toast('ID скопійовано'), () => {});
     if (k === 'team-del' && await confirmBox(a.dataset.kind === 'bosses' ? 'Заборонити цій людині давати вам задачі?' : 'Прибрати людину з команди? Давати їй задачі більше не вийде.', { ok: 'Так' })) {

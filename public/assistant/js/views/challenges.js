@@ -13,7 +13,7 @@ const fmtDay = d => `${+d.slice(8)} ${MON[+d.slice(5, 7) - 1]}`;
 const TODAY = { ok: ['checkCircle', 'Сьогодні зараховано'], pending: ['clock', 'Чекає підтвердження'], rejected: ['x', 'Відхилено — можна надіслати ще раз'] };
 const share = c => {
   const text = `Долучайся до челенджу «${c.title}» у mdmy: код ${c.code}`;
-  if (navigator.share) navigator.share({ title: c.title, text, url: location.origin + '/assistant/#/challenges' }).catch(() => {});
+  if (navigator.share) navigator.share({ title: c.title, text, url: location.origin + '/#/challenges' }).catch(() => {});
   else navigator.clipboard.writeText(text).then(() => toast('Запрошення скопійовано'), () => {});
 };
 

@@ -8,8 +8,24 @@ export const standalone = () => matchMedia('(display-mode: standalone)').matches
 let reg = null;
 export async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
-  try { reg = await navigator.serviceWorker.register('/assistant/sw.js', { scope: '/assistant/' }); } catch (e) { reg = null; }
+  try { reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch (e) { reg = null; }
+  if (reg) moveOldSub().catch(() => {});
   return reg;
+}
+// Застосунок переїхав з /assistant/ у корінь сайту: підписку старого сервіс-воркера переносимо на новий, старий прибираємо
+async function moveOldSub() {
+  const old = await navigator.serviceWorker.getRegistration('/assistant/');
+  if (!old || old.scope === reg.scope) return;
+  const sub = await old.pushManager.getSubscription().catch(() => null);
+  if (sub && Notification.permission === 'granted') {
+    await navigator.serviceWorker.ready;
+    const { publicKey } = await get('push/key');
+    const fresh = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
+    await post('push/subscribe', { subscription: fresh.toJSON() });
+    await post('push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+  }
+  await old.unregister();
 }
 async function registration() { return reg || (reg = await navigator.serviceWorker.ready); }
 async function currentSub() { try { return await (await registration()).pushManager.getSubscription(); } catch (e) { return null; } }

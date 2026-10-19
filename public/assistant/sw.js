@@ -17,7 +17,7 @@ self.addEventListener('push', e => {
     vibrate: d.kind === 'reminder' ? [200, 100, 200, 100, 400] : d.kind === 'routine' ? [120, 80, 120] : [120],
     timestamp: Date.now(),
     actions: (d.actions || []).slice(0, 2),
-    data: { url: d.url || '/assistant/#/today', token: d.token || null, id: d.id || null }
+    data: { url: d.url || '/#/today', token: d.token || null, id: d.id || null }
   };
   e.waitUntil(self.registration.showNotification(d.title || 'mdmy', opts));
 });
@@ -33,9 +33,10 @@ self.addEventListener('notificationclick', e => {
       .catch(() => {}));
     return;
   }
-  const url = new URL(data.url || '/assistant/', self.location.origin).href;
+  const url = new URL(data.url || '/', self.location.origin).href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    const w = list.find(c => c.url.includes('/assistant/'));
+    // вікно застосунку: корінь сайту (або стара адреса /assistant/), не накладні й не адмінка
+    const w = list.find(c => { const p = new URL(c.url).pathname; return p === '/' || p.startsWith('/assistant'); });
     if (w) { w.navigate(url).catch(() => {}); return w.focus(); }
     return self.clients.openWindow(url);
   }));
