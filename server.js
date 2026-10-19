@@ -176,6 +176,15 @@ async function adminUser(req, res, url, a) {
 const wipe = require('./lib/wipe');
 async function account(req, res, url, a) {
   const b = await readBody(req, 1024) || {};
+  // імʼя в привітанні, листах і списку користувачів
+  if (url === '/api/account/name' && req.method === 'POST') {
+    if (a.role === 'demo') return send(res, 403, { error: 'У гостьовому вході імʼя не змінюється.' });
+    const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!name) return send(res, 400, { error: 'Напишіть імʼя.' });
+    db.prepare('UPDATE accounts SET name = ? WHERE id = ?').run(name, a.id);
+    auth.log(a, 'account:name', name);
+    return send(res, 200, { ok: true, name });
+  }
   if (url === '/api/account/reset' && req.method === 'POST') {
     if (b.confirm !== 'ОЧИСТИТИ') return send(res, 400, { error: 'Підтвердіть словом ОЧИСТИТИ.' });
     const w = wsOf(a);

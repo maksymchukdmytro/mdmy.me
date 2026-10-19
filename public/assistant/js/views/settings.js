@@ -186,7 +186,14 @@ export function settingsPage(sub) {
   let me = null, users = [];
   async function loadMe() {
     try { me = (await get('me')).account; } catch (e) { return; }
-    $('.acc-who', root).innerHTML = `<p><b>${esc(me.name)}</b> <span class="muted">· ${esc(me.login)}${me.email ? ' · ' + esc(me.email) : ''}</span></p>`;
+    $('.acc-who', root).innerHTML = me.demo ? `<p><b>${esc(me.name)}</b> <span class="muted">· ${esc(me.login)}</span></p>`
+      : `<div class="kv"><span>Імʼя</span><div><input data-a="acc-name" value="${esc(me.name)}" maxlength="60" autocomplete="name" enterkeyhint="done"></div></div>
+         <p class="muted small acc-login">${esc(me.login)}${me.email ? ' · ' + esc(me.email) : ''}</p>`;
+    const nm = $('[data-a="acc-name"]', root);
+    if (nm) nm.addEventListener('change', async () => {
+      const v = nm.value.trim(); if (!v || v === me.name) { nm.value = me.name; return; }
+      try { me.name = (await post('account/name', { name: v })).name; toast('Імʼя збережено'); document.dispatchEvent(new CustomEvent('mdmy:changed')); } catch (err) { fail(err); nm.value = me.name; }
+    });
     $('.acc-google', root).innerHTML = me.google ? `<p class="small">${icon('checkCircle', 14)} Вхід через Google привʼязано</p>`
       : me.googleOn && !me.demo ? `<a class="btn sm" href="/api/auth/google/start?link=1">Привʼязати вхід через Google</a>` : '';
     $('.acc-old', root).hidden = !me.hasPassword;
