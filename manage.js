@@ -23,8 +23,11 @@ const audit = (action, target) => db.prepare('INSERT INTO audit (at, login, acti
     if (!/^[a-z0-9._-]{3,32}$/.test(l)) return fail('Логін: 3–32 латинські літери, цифри, крапка або дефіс.');
     if (db.prepare('SELECT 1 FROM accounts WHERE login = ?').get(l)) return fail('Такий логін уже є.');
     const pass = DB.tempPassword(), salt = DB.newSalt();
-    db.prepare('INSERT INTO accounts (login, name, salt, hash, created) VALUES (?, ?, ?, ?, ?)')
-      .run(l, name || 'Власник', salt, DB.hashPass(pass, salt), Date.now());
+    // перший обліковий запис — власник (основна база); решта — кожен зі своєю окремою базою, чужих записів не бачить
+    const first = !db.prepare('SELECT 1 FROM accounts LIMIT 1').get();
+    const id = db.prepare('INSERT INTO accounts (login, name, salt, hash, created) VALUES (?, ?, ?, ?, ?)')
+      .run(l, name || 'Власник', salt, DB.hashPass(pass, salt), Date.now()).lastInsertRowid;
+    if (!first) db.prepare('UPDATE accounts SET ws = ? WHERE id = ?').run('u' + id, id);
     audit('account:create', l);
     DB.ensureAdmin(db); DB.ensurePubIds(db);
     console.log(`Створено обліковий запис: ${l}\nПароль: ${pass}`);

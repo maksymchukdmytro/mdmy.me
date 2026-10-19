@@ -1202,3 +1202,4 @@ input[type=checkbox]{min-height:0;accent-color:var(--accent)}
 .dnd-dock.in{pointer-events:auto}
 body.dnd-on .fab{transform:scale(0);opacity:0}
 .card.ghost{transition:scale .15s var(--ease),opacity .15s}.card.ghost.over{scale:.62;opacity:.7}
+.u-warn{display:block;color:var(--red)}.sess.off{opacity:.55}

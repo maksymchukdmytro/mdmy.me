@@ -182,7 +182,7 @@ export function settingsPage(sub) {
   }
 
   // ---------- обліковий запис ----------
-  let me = null;
+  let me = null, users = [];
   async function loadMe() {
     try { me = (await get('me')).account; } catch (e) { return; }
     $('.acc-who', root).innerHTML = `<p><b>${esc(me.name)}</b> <span class="muted">· ${esc(me.login)}${me.email ? ' · ' + esc(me.email) : ''}</span></p>`;
@@ -206,8 +206,11 @@ export function settingsPage(sub) {
   async function loadUsers() {
     let r; try { r = await get('admin/users'); } catch (e) { return; }
     const ROLE = { admin: 'адмін', demo: 'гість', user: '' };
-    $('.users-list', root).innerHTML = r.list.map(u => `<div class="sess">${icon(u.google ? 'checkCircle' : 'circle', 16)}<span><b>${esc(u.name)}</b> <span class="muted small">${esc(u.email || u.login)}${ROLE[u.role] ? ' · ' + ROLE[u.role] : ''}</span></span>
-      <span class="muted small">${u.last_login ? 'вхід ' + esc(fmtDate(u.last_login)) : 'з ' + esc(fmtDate(u.created))}</span></div>`).join('') + `<p class="muted small">Усього: ${r.list.length}</p>`;
+    users = r.list;
+    $('.users-list', root).innerHTML = r.list.map(u => `<div class="sess${u.disabled ? ' off' : ''}">${icon(u.google ? 'checkCircle' : 'circle', 16)}<span><b>${esc(u.name)}</b> <span class="muted small">${esc(u.email || u.login)}${ROLE[u.role] ? ' · ' + ROLE[u.role] : ''}${u.disabled ? ' · вимкнено' : ''}</span>
+        ${!u.ws && u.role !== 'admin' ? '<span class="small u-warn">спільна база з вами — бачить ваші записи</span>' : ''}</span>
+      <span class="muted small">${u.last_login ? 'вхід ' + esc(fmtDate(u.last_login)) : 'з ' + esc(fmtDate(u.created))}</span>
+      ${u.role !== 'admin' ? `<button type="button" class="icon-btn xs" data-a="user-more" data-id="${u.id}" title="Дії">${icon('more', 14)}</button>` : ''}</div>`).join('') + `<p class="muted small">Усього: ${r.list.length}</p>`;
   }
   // підтвердження незворотної дії: треба ввести слово (ОЧИСТИТИ / ВИДАЛИТИ)
   function typed(word, text, ok) {
@@ -331,6 +334,17 @@ export function settingsPage(sub) {
     if (k === 'copy-id') navigator.clipboard.writeText($('.team-id', root).textContent).then(() => toast('ID скопійовано'), () => {});
     if (k === 'team-del' && await confirmBox(a.dataset.kind === 'bosses' ? 'Заборонити цій людині давати вам задачі?' : 'Прибрати людину з команди? Давати їй задачі більше не вийде.', { ok: 'Так' })) {
       try { loadTeam(await api('team/' + a.dataset.kind + '/' + a.dataset.id, { method: 'DELETE' })); } catch (err) { fail(err); }
+    }
+    if (k === 'user-more') {
+      const u = users.find(x => x.id === +a.dataset.id); if (!u) return;
+      const items = [];
+      if (!u.ws) items.push({ value: 'separate', label: 'Дати окрему базу', icon: 'layers' });
+      items.push(u.disabled ? { value: 'enable', label: 'Увімкнути вхід', icon: 'check' } : { value: 'disable', label: 'Вимкнути вхід', icon: 'x' });
+      if (u.ws && u.role !== 'demo') items.push({ sep: true }, { value: 'delete', label: 'Видалити з даними', icon: 'trash', danger: true });
+      const v = await menu(a, items); if (!v) return;
+      const q = { separate: `Дати «${u.name}» окрему порожню базу? Ваші записи цей акаунт більше не бачитиме.`, disable: `Вимкнути вхід для «${u.name}»?`, delete: `Видалити «${u.name}» разом з усіма даними? Скасувати не можна.` }[v];
+      if (q && !await confirmBox(q, { ok: 'Так', danger: v === 'delete' })) return;
+      try { await post('admin/users/' + u.id, { action: v }); toast('Готово'); loadUsers(); } catch (err) { fail(err); }
     }
     if (k === 'copy-redirect') navigator.clipboard.writeText($('.g-redirect', root).textContent).then(() => toast('Скопійовано'), () => {});
     if (k === 'google-clear' && await confirmBox('Видалити секрет Google? Вхід через Google вимкнеться.')) { try { await post('admin/auth', { clearSecret: true }); loadGoogle(); } catch (err) { fail(err); } }

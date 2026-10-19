@@ -98,6 +98,34 @@ function notify(accountId, title, text, url) {
 }
 const team = require('./lib/team')(db, { dataDir: DATA, notify, todayOf });
 
+// ---------- адміністратор: керування обліковими записами ----------
+//  disable / enable — вимкнути вхід (сесії завершуються); separate — акаунту без окремої бази (старий, спільний з власником) дати власну порожню;
+//  delete — видалити акаунт з окремою базою разом із даними.
+async function adminUser(req, res, url, a) {
+  if (a.role !== 'admin') return send(res, 403, { error: 'Лише для адміністратора.' });
+  if (req.method !== 'POST') return send(res, 405, { error: 'Метод не підтримується.' });
+  const id = +url.split('/').pop(), u = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id);
+  if (!u) return send(res, 404, { error: 'Акаунт не знайдено.' });
+  if (u.id === a.id || u.role === 'admin') return send(res, 400, { error: 'Адміністратора тут змінювати не можна.' });
+  const b = await readBody(req, 1024) || {};
+  if (b.action === 'disable' || b.action === 'enable') {
+    db.prepare('UPDATE accounts SET disabled = ? WHERE id = ?').run(b.action === 'disable' ? 1 : 0, id);
+    if (b.action === 'disable') db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
+  } else if (b.action === 'separate') {
+    if (u.ws) return send(res, 400, { error: 'У цього акаунта вже окрема база.' });
+    db.prepare('UPDATE accounts SET ws = ? WHERE id = ?').run('u' + id, id);
+    db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
+  } else if (b.action === 'delete') {
+    if (!u.ws) return send(res, 400, { error: 'Спершу дайте акаунту окрему базу — інакше його дані змішані з вашими.' });
+    team.forgetAccount(id); closeWorkspace(u.ws);
+    try { fs.rmSync(DB.wsDir(DATA, u.ws), { recursive: true, force: true }); } catch (e) {}
+    db.prepare('DELETE FROM sessions WHERE account_id = ?').run(id);
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+  } else return send(res, 400, { error: 'Невідома дія.' });
+  auth.log(a, 'admin:user', u.login, { action: b.action });
+  return send(res, 200, { ok: true });
+}
+
 // ---------- «Почати спочатку» і видалення акаунта ----------
 const wipe = require('./lib/wipe');
 async function account(req, res, url, a) {
@@ -165,10 +193,11 @@ function serveStatic(req, res, url) {
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Не знайдено'); }
     const top = rel.split(/[/\\]/)[0];
-    const headers = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' };
+    const headers = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', ...SECURITY };
     if (SECTIONS.includes(top)) {
-      // асистент можна відкривати як Telegram Web App (у вебверсії Telegram це iframe); решту — лише напряму
-      if (top === 'assistant') headers['Content-Security-Policy'] = "frame-ancestors 'self' https://web.telegram.org";
+      // асистент можна відкривати як Telegram Web App (у вебверсії Telegram це iframe); решту — лише напряму.
+      // CSP: скрипти лише власні (жодних inline і чужих) — навіть якщо десь проскочить вставка HTML, чужий код не виконається.
+      if (top === 'assistant') headers['Content-Security-Policy'] = CSP_APP;
       else headers['X-Frame-Options'] = 'DENY';
       headers['Cache-Control'] = rel.includes('vendor') ? 'public, max-age=604800' : 'no-cache';
     }
@@ -176,6 +205,13 @@ function serveStatic(req, res, url) {
     res.end(data);
   });
 }
+
+// Заголовки безпеки для сторінок: HTTPS назавжди (HSTS), без витоку адрес у Referer, без доступу до камери / геолокації
+const SECURITY = { 'Strict-Transport-Security': 'max-age=31536000', 'Referrer-Policy': 'same-origin',
+                   'Permissions-Policy': 'camera=(), geolocation=(), payment=(), usb=(), microphone=(self)' };
+const CSP_APP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
+                 "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", "frame-src https://www.youtube-nocookie.com", "connect-src 'self'",
+                 "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self' https://web.telegram.org"].join('; ');
 
 // ---------- API ----------
 async function api(req, res, url) {
@@ -190,6 +226,7 @@ async function api(req, res, url) {
   const no = blocked(a, req, url);
   if (no) return send(res, url.startsWith('/api/assistant/') || url.startsWith('/api/stt/') ? 429 : 403, { error: no });
   if (url.startsWith('/api/account/')) return account(req, res, url, a);
+  if (/^\/api\/admin\/users\/\d+$/.test(url)) return adminUser(req, res, url, a);
   if (url.startsWith('/api/admin/')) return auth.google.admin(req, res, url, a);
   if (url === '/api/team' || url.startsWith('/api/team/')) return team.handleTeam(req, res, url, a);
   if (url === '/api/challenges' || url.startsWith('/api/challenges/')) return team.handleChallenges(req, res, url, a);
