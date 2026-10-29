@@ -141,12 +141,15 @@ if [ "$QUICK" != 1 ] || [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
   MYIP="$(curl -fsS -4 --max-time 8 https://api.ipify.org || hostname -I | awk '{print $1}')"
   NAMES="$DOMAIN"; CERT_DOMAINS=(-d "$DOMAIN")
   if [ "$(dig +short A "www.$DOMAIN" | tail -n1)" = "$MYIP" ]; then NAMES="$DOMAIN www.$DOMAIN"; CERT_DOMAINS+=(-d "www.$DOMAIN"); fi
+  # CRM (/crm/) — свій файл налаштувань, створює deploy/install.sh репозиторію crm
+  CRM_INCLUDE=""; [ -f /etc/nginx/snippets/crm.conf ] && CRM_INCLUDE="include snippets/crm.conf;"
   cat > /etc/nginx/sites-available/mdmy <<EOF
 server {
     listen 80;
     $LISTEN6
     server_name $NAMES;
     client_max_body_size 64m;    # голосові записи й відео ритуалів (до 60 МБ)
+    $CRM_INCLUDE
     location / {
         proxy_pass http://127.0.0.1:$PORT;
         proxy_http_version 1.1;
@@ -183,6 +186,9 @@ else
     nginx -t && systemctl reload nginx || warn "nginx не прийняв новий ліміт розміру — відео до 3 МБ"
   fi
 fi
+
+# CRM (mdmy.me/crm) — окремий проєкт; лише вмикаємо його автооновлення, ставиться у фоні
+bash "$SRC_DIR/deploy/crm.sh" --setup || warn "Автооновлення CRM не ввімкнулося (сайт працює)."
 
 say "7/7 Щоденна резервна копія бази"
 cat > /etc/cron.d/mdmy-backup <<EOF

@@ -15,6 +15,10 @@
   Модель за обсягом RAM (≥3.5 ГБ — large-v3-turbo, ≥1.8 ГБ — small, інакше base; distil-* лише англійські) або з `/etc/dm-stt.conf` (`WHISPER_MODEL=...`).
   Nice=10, CPUWeight=20 і MemoryMax, щоб не заважати сайтам; `av<16` у requirements обов'язково (новіші PyAV ламають faster-whisper 1.2.1).
 - На тому ж сервері працює OctoType (служба `dm-type`, порт 3000, `/etc/nginx/sites-available/dm-type`) — його не чіпати.
+- CRM на `mdmy.me/crm/` — окремий проєкт (репозиторій maksymchukdmytro/crm, Python/FastAPI + PostgreSQL). Тут лише `deploy/crm.sh`:
+  `deploy.sh` викликає `crm.sh --setup` → таймер `crm-update` (кожні 5 хв) бере main з GitHub у `/opt/crm-src` і запускає його `deploy/install.sh mdmy.me /crm /etc/nginx/sites-available/mdmy`.
+  Служби `crm-web` (127.0.0.1:8020) і `crm-worker`, код `/opt/crm`, налаштування `/etc/crm/crm.env`, копії `/var/backups/crm`; у nginx mdmy — рядок `include snippets/crm.conf;`
+  (deploy.sh зберігає його в шаблоні). Журнал — той самий `/var/log/mdmy-update.log`; вручну `crm-update --force`. Помилки CRM не зупиняють mdmy.
 
 ## Структура
 - `server.js` — статичні файли з `public/` (розділи `nakladna`, `assistant` віддаються з `X-Frame-Options: DENY`), `/api/*` і `/m/<файл>` (медіа ритуалів).
