@@ -40,7 +40,7 @@ OnUnitActiveSec=5min
 WantedBy=timers.target
 EOS
   systemctl daemon-reload
-  systemctl enable crm-update.timer >/dev/null 2>&1
+  systemctl enable --now crm-update.timer >/dev/null 2>&1   # --now: запустити таймер одразу, а не лише після перезавантаження
   # перша перевірка — у фоні таймером, щоб не затримувати оновлення mdmy
   systemctl start --no-block crm-update.service
   echo "CRM: таймер crm-update увімкнено (журнал: $LOG)"
