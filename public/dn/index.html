@@ -15,7 +15,7 @@
   body { background:var(--bg); color:var(--text); font:16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          display:flex; align-items:center; justify-content:center; padding:16px; overflow:hidden; }
   main { width:100%; max-width:440px; text-align:center; position:relative; z-index:1; }
-  h1 { font-size:clamp(24px, 6.5vw, 32px); line-height:1.15; font-weight:800; letter-spacing:-.02em; }
+  h1 { font-size:clamp(24px, 6.5vw, 32px); line-height:1.15; font-weight:800; letter-spacing:-.02em; margin-bottom:28px; }
   .sub { color:var(--muted); margin:10px 0 28px; font-size:15px; }
   .gauge { position:relative; width:min(78vw, 280px); aspect-ratio:1; margin:0 auto; }
   .gauge svg { width:100%; height:100%; transform:rotate(-90deg); }
@@ -46,15 +46,14 @@
 <canvas id="confetti"></canvas>
 <main>
   <h1>Чи поїде Дмитро на день народження до Олега? 🎂</h1>
-  <p class="sub">Наукова модель на основі 0 даних і 100% інтуїції</p>
   <div class="gauge" id="gauge">
     <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" id="bar" cx="60" cy="60" r="52"/></svg>
     <div class="val"><div class="num" id="num">?</div><div class="label">імовірність</div></div>
   </div>
-  <div class="status" id="status">Натисни, щоб дізнатись правду</div>
+  <div class="status" id="status"></div>
   <button id="go">Дізнатись</button>
 </main>
-<footer>mdmy.me · результати не мають юридичної сили</footer>
+<footer>mdmy.me</footer>
 <script>
 (() => {
   const bar = document.getElementById('bar'), num = document.getElementById('num'), status = document.getElementById('status'),
@@ -62,19 +61,8 @@
   const C = 2 * Math.PI * 52;
   bar.style.strokeDasharray = C; bar.style.strokeDashoffset = C;
 
-  // [до скількох %, тривалість мс, що пишемо]
-  const STEPS = [
-    [34, 1600, 'Аналізуємо календар Дмитра…'],
-    [67, 1500, 'Олег пообіцяв шашлик 🍖'],
-    [81, 1100, 'Перевіряємо прогноз погоди…'],
-    [23, 1300, 'Дмитро згадав, що треба працювати 😬'],
-    [9,  900,  'Квитки подорожчали…'],
-    [46, 1400, 'Олег скинув мем у чат 😂'],
-    [72, 1200, 'Друзі вже питають «ти їдеш?»'],
-    [38, 1000, 'Ой, у CRM знайшовся баг…'],
-    [91, 1500, 'Баг полагоджено. Торт замовлено 🎂'],
-    [100, 900, 'Остаточна перевірка…'],
-  ];
+  // [до скількох %, тривалість мс]
+  const STEPS = [[34, 1600], [67, 1500], [81, 1100], [23, 1300], [9, 900], [46, 1400], [72, 1200], [38, 1000], [91, 1500], [100, 900]];
 
   const color = p => p >= 100 ? '#30d158' : p >= 70 ? '#a3d93a' : p >= 45 ? '#f5c518' : p >= 20 ? '#ff8a3d' : '#e5484d';
   const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -103,8 +91,8 @@
     btn.disabled = true; btn.textContent = 'Рахуємо…';
     document.body.classList.remove('win'); status.classList.remove('done');
     show(0);
-    for (const [to, ms, msg] of STEPS) {
-      status.textContent = msg;
+    status.textContent = '';
+    for (const [to, ms] of STEPS) {
       const drop = to < cur;
       await tween(to, ms);
       if (drop) { gauge.classList.remove('shake'); void gauge.offsetWidth; gauge.classList.add('shake'); }
