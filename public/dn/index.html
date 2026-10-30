@@ -107,7 +107,7 @@
           <path d="M-7.2 -42 C -7.5 -50 7.5 -50 7.2 -42 C 5 -46 -5 -46 -7.2 -42 Z" fill="#9c6a3a"/>
         </g></g>
         <g id="car">
-          <g transform="scale(1.45) translate(-27 -32)">
+          <g transform="scale(-1.45 1.45) translate(-27 -32)">
             <!-- сірий Golf 5: хетчбек збоку -->
             <path d="M3 30 C 2 24 4 21 9 20 L 17 18 C 21 12 25 6 31 5 L 41 5 C 45 5 48 7 50 11 L 53 19 C 54 23 54 27 53 30 Z" fill="#9aa0a8"/>
             <path d="M3 30 L 53 30 L 53 27 L 3 27 Z" fill="#7d838b"/>
@@ -136,7 +136,9 @@
   bar.style.strokeDasharray = C; bar.style.strokeDashoffset = C;
 
   // [до скількох %, тривалість мс]
-  const STEPS = [[34, 1600], [67, 1500], [81, 1100], [23, 1300], [9, 900], [46, 1400], [72, 1200], [38, 1000], [91, 1500], [100, 900]];
+  const SLOW = 1.25;
+  const STEPS = [[31, 1100], [58, 1000], [44, 700], [63, 900], [19, 1000], [52, 1000], [74, 1000], [36, 900],
+                 [61, 900], [88, 1100], [97, 800], [21, 1000], [100, 1200]];
 
   const color = p => p >= 100 ? '#30d158' : p >= 70 ? '#a3d93a' : p >= 45 ? '#f5c518' : p >= 20 ? '#ff8a3d' : '#e5484d';
   const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -166,11 +168,12 @@
     document.body.classList.remove('win', 'trip', 'trip2', 'trip3');
     for (const b of [boyA, boyB]) { b.classList.remove('show', 'walk'); b.style.opacity = ''; } status.classList.remove('done');
     show(0);
-        for (const [to, ms] of STEPS) {
+    for (const [to, d] of STEPS) {
+      const ms = d * SLOW;
       const drop = to < cur;
       await tween(to, ms);
       if (drop) { gauge.classList.remove('shake'); void gauge.offsetWidth; gauge.classList.add('shake'); }
-      await new Promise(r => setTimeout(r, drop ? 450 : 250));
+      await new Promise(r => setTimeout(r, (drop ? 450 : 250) * SLOW));
     }
     status.classList.add('done');
     document.body.classList.add('win');
