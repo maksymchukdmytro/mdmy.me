@@ -207,7 +207,7 @@ const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; char
                 '.png':'image/png', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.txt':'text/plain; charset=utf-8',
                 '.webmanifest':'application/manifest+json' };
 const SECTIONS = ['nakladna', 'assistant', 'admin'];                 // сторінки, що працюють лише після входу
-const REDIRECTS = { '/speachtotext': '/', '/speachtotext/': '/', '/speechtotext': '/', '/speechtotext/': '/', '/assistant': '/', '/assistant/': '/', '/assistant/index.html': '/' };
+const REDIRECTS = { '/dn': '/dn/', '/speachtotext': '/', '/speachtotext/': '/', '/speechtotext': '/', '/speechtotext/': '/', '/assistant': '/', '/assistant/': '/', '/assistant/index.html': '/' };
 // застосунок відкривається з кореня сайту; сервіс-воркер — з кореня, щоб керувати всім сайтом (файл лежить у public/assistant/)
 const ROOT_FILES = { '/sw.js': 'assistant/sw.js' };
 

@@ -21,6 +21,7 @@
   (deploy.sh зберігає його в шаблоні). Журнал — той самий `/var/log/mdmy-update.log`; вручну `crm-update --force`. Помилки CRM не зупиняють mdmy.
 
 ## Структура
+- `public/dn/` — жартівлива сторінка «Чи поїде Дмитро на ДН до Олега» (без входу, один HTML з inline-скриптом; `/dn` → 301 на `/dn/`).
 - `server.js` — статичні файли з `public/` (розділи `nakladna`, `assistant` віддаються з `X-Frame-Options: DENY`), `/api/*` і `/m/<файл>` (медіа ритуалів).
   Застосунок — з кореня: `/` віддає `public/index.html` (CSP_APP), файли застосунку — `/assistant/…`, сервіс-воркер — `/sw.js` (scope `/`, файл `public/assistant/sw.js`).
   Старі адреси `/assistant/`, `/speachtotext` → 301 на `/` (параметри зберігаються). Клієнт переносить push-підписку старого воркера (scope /assistant/) на новий (`push.js` moveOldSub).
