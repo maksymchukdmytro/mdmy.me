@@ -2,58 +2,132 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
 <title>Чи поїде Дмитро на ДН до Олега?</title>
 <meta name="description" content="Найточніший у світі прогноз: чи поїде Дмитро на день народження до Олега.">
 <meta property="og:title" content="Чи поїде Дмитро на ДН до Олега?">
 <meta property="og:description" content="Найточніший у світі прогноз. Натисни «Дізнатись».">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>">
 <style>
-  :root { --bg:#0f1115; --card:#181b22; --text:#f2f3f5; --muted:#8b909c; --track:#262a33; --c:#e5484d; }
-  * { box-sizing:border-box; margin:0; }
+  :root { --bg:#0f1115; --text:#f2f3f5; --muted:#8b909c; --track:#23272f; --c:#e5484d; }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; }
   body { background:var(--bg); color:var(--text); font:16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-         display:flex; align-items:center; justify-content:center; padding:16px; overflow:hidden; }
-  main { width:100%; max-width:440px; text-align:center; position:relative; z-index:1; }
-  h1 { font-size:clamp(24px, 6.5vw, 32px); line-height:1.15; font-weight:800; letter-spacing:-.02em; margin-bottom:28px; }
-  .sub { color:var(--muted); margin:10px 0 28px; font-size:15px; }
-  .gauge { position:relative; width:min(78vw, 280px); aspect-ratio:1; margin:0 auto; }
-  .gauge svg { width:100%; height:100%; transform:rotate(-90deg); }
-  .gauge circle { fill:none; stroke-width:14; }
+         overflow:hidden; overscroll-behavior:none; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+  main { position:relative; z-index:1; height:100vh; height:100dvh; max-width:460px; margin:0 auto; display:flex; flex-direction:column; align-items:center;
+         text-align:center; padding:max(28px, env(safe-area-inset-top)) 20px max(16px, env(safe-area-inset-bottom)); }
+  h1 { font-size:clamp(22px, 6.4vw, 30px); line-height:1.2; font-weight:800; letter-spacing:-.02em; text-wrap:balance; }
+  .mid { flex:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; min-height:0; }
+  .gauge { position:relative; width:min(72vw, 40dvh, 300px); aspect-ratio:1; }
+  .gauge::before { content:""; position:absolute; inset:-14%; border-radius:50%; background:radial-gradient(closest-side, var(--c), transparent);
+                   opacity:.16; transition:background .3s, opacity .4s; }
+  body.win .gauge::before { opacity:.32; }
+  .gauge svg { position:relative; width:100%; height:100%; transform:rotate(-90deg); overflow:visible; }
+  .gauge circle { fill:none; stroke-width:11; }
   .track { stroke:var(--track); }
-  .bar { stroke:var(--c); stroke-linecap:round; transition:stroke .3s; filter:drop-shadow(0 0 10px var(--c)); }
+  .bar { stroke:var(--c); stroke-linecap:round; transition:stroke .3s; }
   .val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-  .num { font-size:clamp(52px, 17vw, 72px); font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.03em; color:var(--c); transition:color .3s; }
-  .num small { font-size:.45em; }
-  .label { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.12em; margin-top:-4px; }
-  .status { min-height:48px; margin:22px 0 18px; font-size:16px; display:flex; align-items:center; justify-content:center; }
-  .status.done { font-size:22px; font-weight:800; color:var(--c); }
-  button { appearance:none; border:0; border-radius:14px; padding:16px 34px; font:inherit; font-size:18px; font-weight:700;
-           background:var(--text); color:var(--bg); cursor:pointer; transition:transform .1s, opacity .2s; }
-  button:active { transform:scale(.96); }
-  button:disabled { opacity:.35; cursor:default; }
+  .num { font-size:clamp(48px, 16vw, 76px); line-height:1; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.04em; color:var(--c); transition:color .3s; }
+  .num small { font-size:.42em; margin-left:2px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.14em; margin-top:8px; }
+  .status { min-height:32px; font-size:clamp(44px, 14vw, 68px); letter-spacing:-.03em; line-height:1; font-weight:800; color:var(--c); opacity:0; transform:translateY(8px); transition:opacity .4s, transform .4s; }
+  .status.done { opacity:1; transform:none; }
+  .bottom { width:100%; }
+  button { appearance:none; border:0; border-radius:16px; width:100%; max-width:360px; height:58px; font:inherit; font-size:18px; font-weight:700;
+           background:var(--text); color:var(--bg); cursor:pointer; transition:transform .12s, opacity .2s, background .3s; }
+  button:active { transform:scale(.97); }
+  button:disabled { opacity:.3; cursor:default; }
+  body.win button { background:var(--c); color:#06260f; }
+  footer { margin-top:14px; color:#4a4f5a; font-size:12px; }
   body.win { animation:flash .9s ease-out; }
   body.win .gauge { animation:pop .5s ease-out; }
   @keyframes flash { from { background:#123d24; } to { background:var(--bg); } }
-  @keyframes pop { 50% { transform:scale(1.07); } }
+  @keyframes pop { 50% { transform:scale(1.06); } }
   .shake { animation:shake .35s; }
   @keyframes shake { 25% { transform:translateX(-6px); } 75% { transform:translateX(6px); } }
-  #confetti { position:fixed; inset:0; pointer-events:none; z-index:0; }
-  footer { position:fixed; bottom:12px; left:0; right:0; text-align:center; color:#4a4f5a; font-size:12px; }
+  #confetti { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:2; }
+  @media (min-height:700px) { main { padding-top:max(48px, env(safe-area-inset-top)); } }
+  .gauge, .status { transition:opacity .5s, transform .5s; }
+  body.trip .gauge, body.trip .status { opacity:0; transform:scale(.9); }
+  body.trip.trip2 .gauge, body.trip.trip2 .status { display:none; }
+  .scene { display:none; width:100%; flex:1; min-height:0; opacity:0; transition:opacity .6s; }
+  body.trip2 .scene { display:flex; align-items:center; justify-content:center; }
+  body.trip3 .scene { opacity:1; }
+  .scene svg { width:100%; height:100%; max-height:62dvh; overflow:visible; }
+  .road { fill:none; stroke:#2a2f38; stroke-width:24; stroke-linecap:round; }
+  .road-line { fill:none; stroke:#e9e3b8; stroke-width:2; stroke-dasharray:9 9; opacity:.7; }
+  .city { fill:var(--text); font:800 26px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing:-.02em; opacity:0; transition:opacity .6s .3s; }
+  body.trip3 .city { opacity:1; }
+  .pin { transform-box:fill-box; }
+  .boy { opacity:0; transition:opacity .35s; }
+  .boy.show { opacity:1; }
+  .boy .leg, .boy .arm { stroke-width:4.5; stroke-linecap:round; fill:none; }
+  .boy .leg { transform-box:fill-box; transform-origin:50% 0; }
+  .boy.walk .l1 { animation:step .32s ease-in-out infinite alternate; }
+  .boy.walk .l2 { animation:step .32s ease-in-out infinite alternate-reverse; }
+  .boy.walk .bw { animation:bob .32s ease-in-out infinite alternate; }
+  @keyframes step { from { transform:rotate(22deg); } to { transform:rotate(-22deg); } }
+  @keyframes bob { to { transform:translateY(-1.5px); } }
+  .pin.land { animation:land .6s ease-out; transform-origin:50% 100%; }
+  @keyframes land { 40% { transform:translate(262px, 74px) scale(1.25); } }
 </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
 <main>
   <h1>Чи поїде Дмитро на день народження до Олега? 🎂</h1>
-  <div class="gauge" id="gauge">
-    <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" id="bar" cx="60" cy="60" r="52"/></svg>
-    <div class="val"><div class="num" id="num">?</div><div class="label">імовірність</div></div>
+  <div class="mid">
+    <div class="gauge" id="gauge">
+      <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" id="bar" cx="60" cy="60" r="52"/></svg>
+      <div class="val"><div class="num" id="num">?</div><div class="label">імовірність</div></div>
+    </div>
+    <div class="status" id="status">ЇДЕ!</div>
+    <div class="scene" id="scene">
+      <svg viewBox="0 0 300 380" aria-label="Дорога до Чернівців">
+        <path id="road" class="road" d="M46 350 C 120 350, 50 262, 140 250 S 250 200, 170 140 S 150 70, 262 74"/>
+        <path class="road-line" d="M46 350 C 120 350, 50 262, 140 250 S 250 200, 170 140 S 150 70, 262 74"/>
+        <g class="pin" id="pin" transform="translate(262 74)">
+          <path d="M0 0 C -10 -14 -14 -20 -14 -28 A 14 14 0 1 1 14 -28 C 14 -20 10 -14 0 0 Z" fill="#e5484d"/>
+          <circle cx="0" cy="-28" r="5.5" fill="#0f1115"/>
+        </g>
+        <text class="city" id="city" x="296" y="26" text-anchor="end">Чернівці</text>
+        <g class="boy" id="boyA"><g class="bw">
+          <path class="leg l1" d="M-3 -16 L -4 0" stroke="#23262d"/><path class="leg l2" d="M3 -16 L 4 0" stroke="#23262d"/>
+          <rect x="-7" y="-34" width="14" height="20" rx="6" fill="#34425f"/>
+          <path class="arm" d="M0 -31 L 0 -19" stroke="#34425f"/>
+          <circle cx="0" cy="-41" r="7" fill="#a8714a"/>
+          <path d="M-7.2 -42 C -7.5 -50 7.5 -50 7.2 -42 C 5 -46 -5 -46 -7.2 -42 Z" fill="#1e1410"/>
+        </g></g>
+        <g class="boy" id="boyB"><g class="bw">
+          <path class="leg l1" d="M-3 -16 L -4 0" stroke="#3a3f4a"/><path class="leg l2" d="M3 -16 L 4 0" stroke="#3a3f4a"/>
+          <rect x="-7" y="-34" width="14" height="20" rx="6" fill="#c25a43"/>
+          <path class="arm" d="M0 -31 L 0 -19" stroke="#c25a43"/>
+          <circle cx="0" cy="-41" r="7" fill="#f0cba8"/>
+          <path d="M-7.2 -42 C -7.5 -50 7.5 -50 7.2 -42 C 5 -46 -5 -46 -7.2 -42 Z" fill="#9c6a3a"/>
+        </g></g>
+        <g id="car">
+          <g transform="scale(1.45) translate(-27 -32)">
+            <!-- сірий Golf 5: хетчбек збоку -->
+            <path d="M3 30 C 2 24 4 21 9 20 L 17 18 C 21 12 25 6 31 5 L 41 5 C 45 5 48 7 50 11 L 53 19 C 54 23 54 27 53 30 Z" fill="#9aa0a8"/>
+            <path d="M3 30 L 53 30 L 53 27 L 3 27 Z" fill="#7d838b"/>
+            <path d="M19 18.5 C 22 13 25 8.5 30 7.8 L 33 7.8 L 33 18.5 Z" fill="#20252c"/>
+            <path d="M35 7.8 L 41 7.8 C 44 7.8 46 9.5 47.5 12 L 49.5 18.5 L 35 18.5 Z" fill="#20252c"/>
+            <path d="M33.6 7 L 34.4 7 L 34.4 19 L 33.6 19 Z" fill="#7d838b"/>
+            <path d="M3.5 22 L 7.5 21.5 L 7.5 24 L 3.5 24.5 Z" fill="#f5f2d6"/>
+            <path d="M51 20 L 53.6 20.5 L 53.8 24 L 51.4 24 Z" fill="#d23b3b"/>
+            <circle cx="14" cy="30" r="6" fill="#16191e"/><circle cx="14" cy="30" r="3" fill="#c3c8cf"/>
+            <circle cx="43" cy="30" r="6" fill="#16191e"/><circle cx="43" cy="30" r="3" fill="#c3c8cf"/>
+          </g>
+        </g>
+      </svg>
+    </div>
   </div>
-  <div class="status" id="status"></div>
-  <button id="go">Дізнатись</button>
+  <div class="bottom">
+    <button id="go">Дізнатись</button>
+    <footer>mdmy.me</footer>
+  </div>
 </main>
-<footer>mdmy.me</footer>
 <script>
 (() => {
   const bar = document.getElementById('bar'), num = document.getElementById('num'), status = document.getElementById('status'),
@@ -89,25 +163,76 @@
 
   async function run() {
     btn.disabled = true; btn.textContent = 'Рахуємо…';
-    document.body.classList.remove('win'); status.classList.remove('done');
+    document.body.classList.remove('win', 'trip', 'trip2', 'trip3');
+    for (const b of [boyA, boyB]) { b.classList.remove('show', 'walk'); b.style.opacity = ''; } status.classList.remove('done');
     show(0);
-    status.textContent = '';
-    for (const [to, ms] of STEPS) {
+        for (const [to, ms] of STEPS) {
       const drop = to < cur;
       await tween(to, ms);
       if (drop) { gauge.classList.remove('shake'); void gauge.offsetWidth; gauge.classList.add('shake'); }
       await new Promise(r => setTimeout(r, drop ? 450 : 250));
     }
-    status.textContent = 'ДМИТРО ЇДЕ! 🎉'; status.classList.add('done');
+    status.classList.add('done');
     document.body.classList.add('win');
     confetti();
+    try { navigator.vibrate && navigator.vibrate([60, 40, 120]); } catch (e) {}
+    await wait(1800);
+    btn.textContent = 'В дорозі…';
+    await trip();
     btn.disabled = false; btn.textContent = 'Перевірити ще раз';
+  }
+
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const road = document.getElementById('road'), car = document.getElementById('car'), pin = document.getElementById('pin'),
+        boyA = document.getElementById('boyA'), boyB = document.getElementById('boyB');
+  const tw = (ms, fn) => new Promise(done => { const t0 = performance.now();
+    (function f(now) { const t = Math.min(1, (now - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(f) : done(); })(t0); });
+  const at = (el, x, y, k = 1, flip = false) => el.setAttribute('transform', `translate(${x} ${y}) scale(${flip ? -k : k} ${k})`);
+  // двоє хлопців сідають в авто: темніший — зліва, світліший — справа
+  async function board() {
+    const p = road.getPointAtLength(0), y = p.y + 6, K = 1.25;
+    at(boyA, p.x - 74, y, K); at(boyB, p.x + 116, y, K, true);
+    for (const b of [boyA, boyB]) b.classList.add('show', 'walk');
+    await tw(1500, t => { at(boyA, p.x - 74 + 52 * t, y, K); at(boyB, p.x + 116 - 84 * t, y, K, true); });
+    for (const b of [boyA, boyB]) b.classList.remove('walk');
+    await wait(200);
+    await tw(350, t => { at(boyA, p.x - 22 + 6 * t, y - 4 * t, K * (1 - .5 * t)); at(boyB, p.x + 32 - 6 * t, y - 4 * t, K * (1 - .5 * t), true);
+                         boyA.style.opacity = boyB.style.opacity = 1 - t; });
+    await tw(300, t => place(0, Math.sin(t * Math.PI) * 2.5));      // авто осідає
+    await wait(350);
+  }
+  function place(t, dy = 0) {
+    const L = road.getTotalLength() - 52; t = Math.max(0, t); const a = road.getPointAtLength(L * t), b = road.getPointAtLength(Math.min(L, L * t + 1)),
+          c = road.getPointAtLength(Math.max(0, L * t - 1));
+    let ang = Math.atan2(b.y - c.y, b.x - c.x) * 180 / Math.PI;
+    const flip = Math.abs(ang) > 90;                       // їде вліво — розвертаємо, щоб не догори колесами
+    if (flip) ang += 180;
+    if (ang > 180) ang -= 360;
+    ang = Math.max(-38, Math.min(38, ang));
+    car.setAttribute('transform', `translate(${a.x} ${a.y + dy}) rotate(${ang})` + (flip ? ' scale(-1 1)' : ''));
+  }
+  async function trip() {
+    const B = document.body;
+    place(0);
+    B.classList.add('trip'); await wait(500);
+    B.classList.add('trip2'); await wait(30);
+    B.classList.add('trip3'); await wait(700);
+    await board();
+    const ms = 6000, t0 = performance.now();
+    await new Promise(done => (function frame(now) {
+      const t = Math.min(1, (now - t0) / ms);
+      place(t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+      t < 1 ? requestAnimationFrame(frame) : done();
+    })(t0));
+    pin.classList.remove('land'); void pin.getBoundingClientRect(); pin.classList.add('land');
+    confetti();
   }
 
   // конфеті
   const cv = document.getElementById('confetti'), ctx = cv.getContext('2d');
   function confetti() {
-    const W = cv.width = innerWidth, H = cv.height = innerHeight;
+    const W = innerWidth, H = innerHeight, d = devicePixelRatio || 1;
+    cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0);
     const cols = ['#30d158', '#f5c518', '#ff8a3d', '#5ac8fa', '#ff375f', '#bf5af2'];
     const ps = Array.from({ length: 160 }, () => ({
       x: W / 2, y: H * .45, vx: (Math.random() - .5) * 16, vy: -Math.random() * 15 - 4,
